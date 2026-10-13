@@ -1,0 +1,20 @@
+# The numbers of ONE athlete. The rules, the same for everyone, live in rules.toml.
+# Copy this file to data/athlete.toml; the coach skill fills it in during the intake.
+
+[baseline]
+# Floor under the presumed baseline (spec 8.5): the watch is new, the athlete is not.
+# Filled in during the intake from the questions on personal bests and years of running.
+# 0 means "no floor": what Garmin recorded is used as it is.
+floor_weekly_km = 0.0
+floor_long_run_km = 0.0
+
+[history]
+# Periods with no recordings during which training nevertheless continued.
+# Only the athlete knows this: to Garmin a broken watch and a three-month layoff look
+# identical, and treating them the same way is wrong half the time (spec 8.5). The dates
+# can be approximate: what counts is how much of the hole stays uncovered, not precision.
+#
+# [[history.data_gaps]]
+# start = 2026-01-15
+# end = 2026-03-01
+# reason = "watch away for repair: training continued"

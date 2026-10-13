@@ -1,0 +1,30 @@
+# Canonical values for the test suite. Independent of config/rules.toml,
+# which the athlete tunes: their tuning must never break the tests.
+# What each key means is explained in config/rules.toml.
+#
+# The suite runs as a new athlete, with no floor and no declared gap. Tests that need
+# either build their own config.
+
+[regime]
+cold_max_days = 13
+warm_max_days = 27
+decay_threshold_weeks = 3
+
+[guardrails]
+acwr_min = 0.8
+acwr_max = 1.3
+acwr_block = 1.7
+weekly_volume_increase_max_pct = 10.0
+weekly_volume_increase_block_pct = 25.0
+volume_reference_weeks = 4
+long_run_increase_max_pct = 10.0
+long_run_increase_block_pct = 30.0
+long_run_reference_days = 30
+long_run_share_max_pct = 60.0
+min_easy_days_after_quality = 1
+down_week_every = 4
+fallback_weekly_km_cap = 45.0
+fallback_long_run_km_cap = 16.0
+
+[workout]
+easy_step_target = "Z2 Pace"

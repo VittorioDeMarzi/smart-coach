@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+*.egg-info/
+.superpowers/
+*service-account*.json
+# The athlete's own data stays on their machine. The repository holds code and rules
+# only, so cloning it never hands one athlete's profile or plan to another. Everything
+# in data/ is ignored except the note that explains the folder.
+data/*
+!data/README.md

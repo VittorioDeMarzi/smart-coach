@@ -1,0 +1,12 @@
+{
+  "activities": [
+    {"startTimeLocal": "2026-09-20 07:30:00", "activityType": {"typeKey": "running"},
+     "distance": 8046.7, "duration": 2400.0, "averageHR": 142},
+    {"startTimeLocal": "2026-09-21 09:00:00", "activityType": {"typeKey": "cycling"},
+     "distance": 80000.0, "duration": 10800.0, "averageHR": 128},
+    {"startTimeLocal": "2026-09-23 18:15:00", "activityType": {"typeKey": "trail_running"},
+     "distance": 12500.0, "duration": 4200.0, "averageHR": 150},
+    {"startTimeLocal": "2026-09-25 07:00:00", "activityType": {"typeKey": "walking"},
+     "distance": 3000.0, "duration": 2100.0, "averageHR": null}
+  ]
+}

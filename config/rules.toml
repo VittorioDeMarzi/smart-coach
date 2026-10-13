@@ -1,0 +1,55 @@
+# Every tunable rule of the system. Single source of truth.
+# Only rules live here, the same for everyone. One athlete's own numbers (baseline floor,
+# periods run without recording) live in data/athlete.toml, on that athlete's machine.
+
+[regime]
+# Up to this many days of usable history: COLD regime (bootstrap).
+cold_max_days = 13
+# Up to this many: WARM. Beyond: HOT. The chronic load window is 28 days.
+warm_max_days = 27
+# An interruption longer than this invalidates the baseline and returns to COLD (spec 8.4).
+decay_threshold_weeks = 3
+
+[guardrails]
+# Acute/chronic load ratio allowed for the week about to be published.
+# A heuristic debated in the literature, not established truth: it is here as a limit
+# the system can check by itself. Above acwr_max the week is flagged, above acwr_block it
+# is refused: the difference between "watch out" and "stop" is what keeps the check from
+# being routinely overridden.
+acwr_min = 0.8
+acwr_max = 1.3
+acwr_block = 1.7
+# Largest weekly volume increase. The reference is the larger of the previous week and
+# the average of the last `volume_reference_weeks` weeks, so a down week or a trip does
+# not restart the ladder. Above max_pct the week is flagged. It is refused above
+# block_pct, but never below the highest week of that period: returning to a level held
+# recently is a warning, exceeding it is a block.
+weekly_volume_increase_max_pct = 10.0
+weekly_volume_increase_block_pct = 25.0
+volume_reference_weeks = 4
+# The long run is measured against the longest run of the last `long_run_reference_days`
+# days: flagged above max_pct, refused above block_pct. The bands come from a cohort of
+# 5,205 Garmin users (Br J Sports Med, 2025): injury rate rises once a single run exceeds
+# the longest of the previous 30 days by more than 10%.
+long_run_increase_max_pct = 10.0
+long_run_increase_block_pct = 30.0
+long_run_reference_days = 30
+# From three runs up, a week that is almost only its long run is flagged, never refused:
+# the most lopsided week of a plan is the race week. Not a figure from the literature,
+# a chosen threshold: how long the long run may be is decided by the rule above.
+long_run_share_max_pct = 60.0
+# Minimum easy days after a quality session.
+min_easy_days_after_quality = 1
+# A down week at least every N weeks.
+down_week_every = 4
+# Fallbacks used when the load cannot be computed (spec 7.2, 8.3).
+# Stricter than the nominal rules by construction: a missing check is never skipped.
+fallback_weekly_km_cap = 45.0
+fallback_long_run_km_cap = 16.0
+
+[workout]
+# Target given to a workout written without explicit steps (the easy runs).
+# Not cosmetic: every documented intervals.icu step carries a target, and a WORKOUT event
+# whose description does not parse as steps is rejected. It lives here and not in the
+# code because which zone an easy run is run in is a training decision.
+easy_step_target = "Z2 Pace"
