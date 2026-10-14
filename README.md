@@ -82,11 +82,16 @@ The password is needed for the first login; after that the session is kept in
 2. Go to **Settings** and find the **Garmin Connect** section: connect your Garmin
    account and **tick the option to upload planned workouts**. Without that tick the
    workouts reach intervals.icu but not the watch.
-3. Still in Settings, near the bottom, find **Developer Settings**. There you have:
+3. Still in Settings, open the **Run** tab and, under the pace settings, fill in the
+   **Threshold pace**: the pace you could hold for about an hour (a recent 10K pace is a
+   fair start). Leave the button that applies the change to past activities alone.
+   Without a threshold pace, any target written as a zone or a percentage reaches the
+   watch **with no pace at all**, and nothing tells you.
+4. Still in Settings, near the bottom, find **Developer Settings**. There you have:
    - your **Athlete ID**, which starts with `i` (for example `i123456`): the `i` is part
      of the ID and must be copied;
    - the **API key**: if there is none, generate it.
-4. Copy both into `.env`:
+5. Copy both into `.env`:
 
 ```
 INTERVALS_ATHLETE_ID=i123456

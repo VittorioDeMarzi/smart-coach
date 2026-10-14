@@ -48,7 +48,9 @@ fallback_weekly_km_cap = 45.0
 fallback_long_run_km_cap = 16.0
 
 [workout]
-# Target given to a workout written without explicit steps (the easy runs).
+# Target given to a workout published without explicit steps. A safety net only: the
+# coach writes explicit steps with a narrow range, because a whole zone is too wide to
+# guide a run and depends on the threshold pace set on intervals.icu.
 # Not cosmetic: every documented intervals.icu step carries a target, and a WORKOUT event
 # whose description does not parse as steps is rejected. It lives here and not in the
 # code because which zone an easy run is run in is a training decision.

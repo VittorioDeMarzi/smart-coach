@@ -67,6 +67,17 @@ drop.
   (`resting HR + 0.65-0.70 × (max HR − resting HR)`).
 - If the athlete says a pace is too easy and their data agrees, they are right.
 - Recompute it at every weekly adaptation: it moves with fitness and with the season.
+- **Write it as a range about 25 s/km wide, and treat the fast end as the cap.** GPS pace
+  wobbles by 10-15 s/km on its own, more between buildings and bridges: a narrower range
+  makes the watch nag while the athlete runs correctly. In an easy run the mistake to
+  prevent is going too fast, not too slow. The long run sits about 10 s/km slower than
+  the easy runs.
+- **Never rely on the generic zone.** Do not leave an easy run or a long run without
+  steps: the fallback target (`Z2 Pace`) is a whole zone, about 45 s/km wide, and it
+  depends on the threshold pace set on intervals.icu. Write the range explicitly.
+- Heart-rate targets are better for easy running — they hold through heat, hills and
+  fatigue — but only once the athlete's maximum heart rate has been measured. Until
+  then, use pace.
 
 ## Variety
 
@@ -210,8 +221,8 @@ bootstrap that is not explained looks like a poor plan and gets dropped.
 Follow this format exactly, or `validate` cannot read it. The keywords (`# Plan`,
 `**Goal:**`, `easy`, `quality`) are fixed and in English; names and prose are free.
 
-One line per workout and — for the sessions where the target matters — **step lines
-indented by 2 spaces, written in the native intervals.icu syntax**:
+One line per workout and, in the weeks with detail, **step lines indented by 2 spaces,
+written in the native intervals.icu syntax**:
 
 ```markdown
 # Plan
@@ -223,13 +234,18 @@ indented by 2 spaces, written in the native intervals.icu syntax**:
 Build week: HRV stable, third of the block.
 
 - 2026-09-28 | Easy | 8.0 km | easy
+  - 7km 5:40/km-6:05/km Pace
+  - Cooldown press lap 1km 6:15/km-7:30/km Pace intensity=cooldown
 - 2026-09-30 | Fartlek | 10.0 km | quality
-  - Warmup 10m Z2 Pace
+  - Warmup press lap 2km 5:40/km-6:05/km Pace intensity=warmup
   6x
     - 2m 4:10/km Pace
-    - 90s Z2 Pace
-  - Cooldown 10m Z2 Pace
+    - 90s 6:15/km-7:30/km Pace
+  - Cooldown press lap 1.5km 6:15/km-7:30/km Pace intensity=cooldown
 - 2026-10-04 | Long run | 16.0 km | easy
+  - Warmup press lap 1km 5:50/km-6:30/km Pace intensity=warmup
+  - 14km 5:50/km-6:15/km Pace
+  - Cooldown press lap 1km 6:15/km-7:30/km Pace intensity=cooldown
 
 ## 2026-W41
 
@@ -247,9 +263,18 @@ Format rules:
 - The last field of a workout line is `easy` or `quality`. The kilometres on that line
   are the total volume of the session: it is the number the guardrails use, so it must
   be right even when the steps are timed.
-- **Easy runs need no steps.** Without steps they become a single distance step with the
-  target taken from `easy_step_target` in `config/rules.toml` (`Z2 Pace` by default).
-  Write explicit steps only when you want a different target.
+- **Every workout in a detailed week has explicit steps**, easy runs and long runs
+  included (see "Easy-run pace"). A workout without steps is published as a single step
+  with `easy_step_target` from `config/rules.toml`: a safety net, not a way to write a
+  session.
+- **Every workout ends with a cool-down of at least 1 km**, as its own step:
+  `- Cooldown press lap 1km <slow range> Pace intensity=cooldown`. `press lap` makes the
+  watch stay on that step until the athlete presses the lap button, so the cool-down
+  lasts as long as the way home. Quality sessions also open with a warm-up written the
+  same way (`intensity=warmup`); a long run opens with a free first kilometre.
+- An easy run on a day with a time limit can be written by time (`40m` instead of a
+  distance), so it fits the day whatever pace it allows. The kilometres on the workout
+  line stay an honest estimate, cool-down included: they are what the guardrails count.
 - Steps are indented by **2 spaces**. A repeat block opens with `Nx` at 2 spaces and its
   body sits at **4 spaces**.
 - The prose that explains the week is **not indented**: an indented line is a step, and
@@ -265,8 +290,18 @@ builder. The rules that matter:
 | Shape | `- <duration or distance> <target>` |
 | Durations | `10m` (minutes), `90s`, `1h`, `1h2m30s` |
 | Distances | `2km`, `400mtr`, `1mi` |
-| Pace targets | `Z2 Pace`, `4:10/km Pace`, `85% Pace`, `78-82% Pace` |
+| Pace targets | `4:10/km Pace` (exact), `5:40/km-6:05/km Pace` (range), `78-82% Pace`, `Z2 Pace` |
+| Heart-rate targets | `75-80% HR` (of max), `90-95% LTHR`, `Z2 HR` — absolute bpm are not supported |
+| Step ends on the lap button | `press lap` anywhere before the duration |
+| Step type on the watch | `intensity=warmup`, `intensity=cooldown`, `intensity=recovery` at the end |
+| Cue shown on the watch | any text before the first duration (`Warmup`, `Cooldown`) |
 | Repeats | `6x` on a line of its own, body indented below |
+
+Percentages and zones depend on the thresholds set on intervals.icu; an exact pace or a
+pace range does not. Prefer the latter while the thresholds are estimates.
+
+After the first publication that uses a syntax for the first time, check on Garmin
+Connect that the step arrived with its target and its type, not as plain text.
 
 **The trap: `m` means minutes, not metres.** 400 metres is written `400mtr`; `400m` is
 four hundred minutes. Getting this wrong produces a session that looks plausible and is
