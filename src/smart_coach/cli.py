@@ -10,8 +10,7 @@ from dotenv import load_dotenv
 
 from smart_coach.config import (Config, ConfigError, MissingSettingError, load_config,
                                 required_setting)
-from smart_coach.garmin_reader import (GarminAuthError, GarminError, build_client,
-                                       fetch_snapshot)
+from smart_coach.garmin_reader import GarminError, build_client, fetch_snapshot
 from smart_coach.guardrails import blocking, validate, validate_structure
 from smart_coach.intervals_pusher import PushResult, push_week
 from smart_coach.models import (Activity, Plan, Regime, Severity, Snapshot, Week,
@@ -39,19 +38,10 @@ def _config(rules_path: str) -> Config:
     return load_config(rules_path, DEFAULT_ATHLETE)
 
 
-def mfa_prompt() -> str:
-    """Ask the athlete for Garmin's one-time code.
-
-    Only ever from a real terminal: the code is theirs to type, and a run with no
-    terminal must fail with an instruction rather than hang waiting on stdin.
-    """
-    if not sys.stdin.isatty():
-        raise GarminAuthError(
-            "Garmin asks for a verification code. Run this command in your own "
-            "terminal, once: after the first login the token stays cached and later "
-            "runs do not ask again."
-        )
-    return input("Garmin verification code: ").strip()
+def _today_snapshot(config: Config) -> Snapshot:
+    """What Garmin knows today, with the load computed for the athlete's declared sex."""
+    return fetch_snapshot(build_client(), date.today(), SNAPSHOT_DAYS,
+                          is_male=config.profile.is_male)
 
 
 def _report(violations) -> None:
@@ -160,9 +150,9 @@ def select_week_index(
 def _load_state(plan_path: str, week_number: int | None, iso_year: int | None):
     plan = read_plan(plan_path)
     index = select_week_index(plan, week_number, iso_year, date.today())
-    snapshot = fetch_snapshot(build_client(mfa_prompt), date.today(), SNAPSHOT_DAYS)
-    regime = determine_regime(snapshot, _config(DEFAULT_CONFIG))
-    return plan, index, snapshot, regime
+    config = _config(DEFAULT_CONFIG)
+    snapshot = _today_snapshot(config)
+    return plan, index, snapshot, determine_regime(snapshot, config)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -214,14 +204,16 @@ def recent_runs_report(snapshot: Snapshot) -> list[str]:
 
 
 def _snapshot_command() -> int:
-    snapshot = fetch_snapshot(build_client(mfa_prompt), date.today(), SNAPSHOT_DAYS)
-    regime = determine_regime(snapshot, _config(DEFAULT_CONFIG))
+    config = _config(DEFAULT_CONFIG)
+    snapshot = _today_snapshot(config)
+    regime = determine_regime(snapshot, config)
     print(f"regime: {regime.value} | days of data: {snapshot.days_of_data} | "
           f"running km: {snapshot.running_km:.1f}")
     print(f"chronic/acute load: {snapshot.chronic_load}/{snapshot.acute_load} | "
           f"missing: {snapshot.missing_metrics or 'none'}")
-    print(f"VO2max: {snapshot.vo2max} | resting HR: {snapshot.resting_hr} | "
-          f"HRV: {snapshot.hrv_status}")
+    if config.profile.sex is None:
+        print(f"load not computed: declare [profile] sex in {DEFAULT_ATHLETE}")
+    print(f"resting HR: {snapshot.resting_hr} | HRV: {snapshot.hrv_status}")
     print(f"Runs of the last {SNAPSHOT_DAYS} days:")
     print("\n".join(recent_runs_report(snapshot)))
     return 0

@@ -57,8 +57,7 @@ duration and heart rate of each run (section 6), which Strava has too: a Strava 
 would genuinely cover a period Garmin did not record. That case is handled differently,
 by the athlete declaring the period (8.5).
 
-Garmin is also the richer source: it exposes sleep, HRV, resting heart rate and, on the
-models that compute it, training load.
+Garmin is also the richer source: it exposes sleep, HRV and resting heart rate.
 
 ### 3.2 Cost — 0 EUR/month
 
@@ -85,6 +84,10 @@ public API for personal use; intervals.icu publishes an API with personal keys.
 **Consequence:** reading Garmin, and therefore validating and adapting the plan, can
 only run from a residential network — the athlete's own computer. A VPS has a datacentre
 address and is excluded for the same reason.
+
+That probe was against the unofficial login, which reading no longer uses (4.1). The
+Personal API has not been probed from a datacentre, so the constraint stands until it
+is; the athlete's data staying on their machine (section 5) keeps the run local anyway.
 
 **Corollary:** the weekly run must **tolerate delay**. A laptop is not a reliable
 scheduler; if the run does not happen on Sunday it must be able to happen on Wednesday
@@ -116,8 +119,15 @@ public API and an official integration that sends planned workouts to Garmin by 
 
 **The second is used for writing.** The code talks to a documented API, and the fragile
 part — unofficial interaction with Garmin — is left to a service that maintains it
-officially. The unofficial client stays necessary for **reading**, where intervals.icu
-does not expose the same recovery metrics.
+officially.
+
+**Reading goes through Garmin's Personal API**, Garmin's official read-only access to
+one's own data, opened in October 2026. The athlete creates a key on Garmin Connect Web
+and puts it in `.env`; each run exchanges it for a bearer token. No password, no MFA, no
+cached session. It covers what the guardrails read — activities, resting heart rate,
+HRV status, heart rate zones — but neither Garmin's own training load nor VO2max, and
+not the athlete's sex: the load is always derived (section 6) and the sex is declared.
+It cannot write, so intervals.icu stays the way to the watch.
 
 ### 4.2 Components
 
@@ -126,7 +136,7 @@ Each component has one responsibility.
 | Component | Responsibility |
 |---|---|
 | `garmin_reader` | Read Garmin Connect into an immutable `Snapshot` |
-| `load` | Derive acute and chronic load from activities when the watch does not report it |
+| `load` | Derive acute and chronic load from the activities, the same way on every watch |
 | `regime` | Decide how much of the history still counts (section 8) |
 | `guardrails` | Validate a proposed week against the hard rules (section 7) |
 | `plan_writer` | Parse and serialise `plan.md` |
@@ -173,17 +183,21 @@ the race, its priority, the target, the long-run day and known commitments. The 
 check-in** reverses the rule and asks almost nothing: new pain, and anything that upends
 the coming week. The exact protocol is in `.claude/skills/coach/SKILL.md`.
 
-**Training load.** Performance watches report acute and chronic load; lifestyle models
-(the Venu series among them) do not. When the watch does not report it, the load is
-derived with Banister's TRIMP from what every run has, duration and average heart rate:
+**Training load.** Garmin's Personal API does not expose Garmin's own acute and chronic
+load, and lifestyle models (the Venu series among them) do not compute it at all. The
+load is therefore always derived, with Banister's TRIMP, from what every run has,
+duration and average heart rate. One formula for every watch also keeps the 28-day
+chronic window comparable when the athlete changes device:
 
 ```
 TRIMP = minutes × hrr × Y        hrr = (avg HR − resting HR) / (max HR − resting HR)
 Y = 0.64 · e^(1.92·hrr)  for men        0.86 · e^(1.67·hrr)  for women
 ```
 
-Acute load is the mean daily TRIMP over 7 days, chronic over 28. Resting heart rate,
-maximum heart rate and sex are read from Garmin, not asked.
+Acute load is the mean daily TRIMP over 7 days, chronic over 28. Resting heart rate and
+maximum heart rate are read from Garmin. Sex is declared in `data/athlete.toml`, because
+the Personal API does not expose it; undeclared, there is no load and the absolute caps
+apply (8.3), never the male formula by default.
 
 A window with no run has zero load: that is rest, and it is known. A window in which
 **any** run cannot be scored — no heart rate — has an **unknown** load, not a lower one.
@@ -419,8 +433,8 @@ look like one, so there is no catch-all.
 
 | Situation | Behaviour |
 |---|---|
-| Garmin login fails, or a verification code is needed | stop. Never a plan on stale data without saying so |
-| Garmin fails after the login (rate limit, timeout, changed payload) | stop: a snapshot is all or nothing |
+| Garmin refuses the key, or cannot be reached for a token | stop, saying how to renew the key. Never a plan on stale data without saying so |
+| Garmin fails after the token (rate limit, timeout, changed payload) | stop: a snapshot is all or nothing |
 | A metric is missing | the run continues, and the rule that needs it uses its fallback (8.3) |
 | A setting is missing from `.env` | stop, naming the variable |
 | `rules.toml` or `athlete.toml` is malformed | stop, naming the file and the section |
@@ -445,7 +459,8 @@ look like one, so there is no catch-all.
 ## 13. Sources
 
 - Strava API Policy — https://www.strava.com/legal/api_policy
-- `cyberjunky/python-garminconnect` — https://github.com/cyberjunky/python-garminconnect
+- Garmin Connect Personal API — https://developer.garmin.com/gc-developer-program/personal/personal-api
+- Garmin Connect Personal API, Swagger — https://developer.garmin.com/gc-developer-program/personal/swagger-docs/
 - intervals.icu API — https://intervals.icu/api/v1/docs
 - intervals.icu, uploading planned workouts — https://forum.intervals.icu/t/uploading-planned-workouts-to-intervals-icu/63624
 - "How much running is too much?", British Journal of Sports Medicine, 2025 — https://pmc.ncbi.nlm.nih.gov/articles/PMC12421110

@@ -29,7 +29,7 @@ def _snapshot(*weekly_km: float, load: float | None = 400.0) -> Snapshot:
                           distance_km=km, duration_s=1800, avg_hr=140)
                  for n, km in enumerate(weekly_km))
     return Snapshot(as_of=AS_OF, activities=runs, chronic_load=load, acute_load=load,
-                    vo2max=None, resting_hr=None, hrv_status=None)
+                    resting_hr=None, hrv_status=None)
 
 
 def test_the_previous_week_is_the_adjacent_iso_week_or_nothing():

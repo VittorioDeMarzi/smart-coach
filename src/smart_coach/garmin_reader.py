@@ -1,58 +1,97 @@
-"""Read Garmin Connect into a Snapshot.
+"""Read Garmin Connect into a Snapshot, through Garmin's Personal API.
 
-Garmin's web API is unofficial and its payload shapes are undocumented and nested, so
-every extraction is best-effort and yields None on any missing path. None means missing,
-never zero: the guardrails treat the two differently on purpose (spec 8.3).
+The Personal API is Garmin's official, read-only access to one's own data: a key created
+on Garmin Connect Web is exchanged for a bearer token valid 24 hours. The payloads are
+documented, but every extraction stays best-effort and yields None on any missing path.
+None means missing, never zero: the guardrails treat the two differently on purpose
+(spec 8.3).
 
 Distances arrive in metres and are converted to kilometres here, in one place.
 """
 
 from __future__ import annotations
 
-import os
 from datetime import date, timedelta
 from typing import Any, Callable, Protocol
+
+import requests
 
 from smart_coach.config import required_setting
 from smart_coach.load import AthleteProfile, acute_chronic_load
 from smart_coach.models import HISTORY_DAYS, Activity, Snapshot
 
 METRES_PER_KM = 1000.0
-# Garmin's own default location. Tokens land here after the first login and refresh
-# themselves, so a multi-factor code is asked once rather than on every run.
-TOKEN_STORE = "~/.garminconnect"
-TOKEN_STORE_VARIABLE = "GARMIN_TOKEN_STORE"
+BASE_URL = "https://personal.connectapi.garmin.com"
+TOKEN_PATH = "/personalapitoken-service/personal-api/personal-api-key/token"
+ACTIVITIES_PATH = "/activitylist-service/activities/search/activities"
+API_KEY_VARIABLE = "GARMIN_API_KEY"
+REQUEST_TIMEOUT_S = 30
+# The API's own default page size; a page shorter than this is the last one.
+ACTIVITY_PAGE_SIZE = 99
+REFUSED_KEY_STATUSES = frozenset({401, 403})
 # Wellness data for today is absent until the watch syncs, so every daily metric is
 # looked up backwards from as_of until one has a value. These metrics move slowly:
 # yesterday's resting heart rate is a good answer, silently dropping it is not.
 DAILY_LOOKBACK_DAYS = 7
 RUNNING_TYPE_KEYS = frozenset({"running", "trail_running", "treadmill_running",
                                "track_running", "indoor_running"})
+# Garmin keeps a max heart rate per sport; the running one, when the athlete set it, is
+# the one their runs were measured against.
+ZONE_SPORTS_BY_PREFERENCE = ("RUNNING", "DEFAULT")
 
 
 class GarminError(RuntimeError):
     """Garmin Connect could not be used. A named type so the CLI can report it as a
-    stop rather than letting whatever the unofficial library raises escape as a
-    traceback (spec 11)."""
+    stop rather than letting an HTTP library error escape as a traceback (spec 11)."""
 
 
 class GarminAuthError(GarminError):
-    """Login failed: wrong credentials, or an MFA code is required."""
+    """No token: the key was refused, or Garmin could not be reached to exchange it."""
 
 
 class GarminReadError(GarminError):
-    """The login worked and reading the data did not: a rate limit, a timeout, or a
+    """The token worked and reading the data did not: a rate limit, a timeout, or a
     payload whose shape changed. Nothing was read, so nothing may be decided on it."""
 
 
 class GarminClient(Protocol):
-    def get_activities_by_date(self, start: str, end: str) -> list[dict[str, Any]]: ...
-    def get_training_status(self, day: str) -> Any: ...
-    def get_max_metrics(self, day: str) -> Any: ...
-    def get_rhr_day(self, day: str) -> Any: ...
-    def get_hrv_data(self, day: str) -> Any: ...
-    def get_user_profile(self) -> Any: ...
-    def get_heart_rate_zones(self) -> Any: ...
+    def activities(self, start: str, end: str) -> list[dict[str, Any]]: ...
+    def daily_heart_rate(self, day: str) -> Any: ...
+    def hrv(self, day: str) -> Any: ...
+    def heart_rate_zones(self) -> Any: ...
+
+
+class PersonalApiClient:
+    """The four Personal API reads a snapshot needs, over an authenticated session."""
+
+    def __init__(self, session: requests.Session) -> None:
+        self._session = session
+
+    def _get(self, path: str, **params: Any) -> Any:
+        """Decoded JSON, or None for a day Garmin has nothing for (204, empty body)."""
+        response = self._session.get(BASE_URL + path, params=params,
+                                     timeout=REQUEST_TIMEOUT_S)
+        response.raise_for_status()
+        return response.json() if response.text.strip() else None
+
+    def activities(self, start: str, end: str) -> list[dict[str, Any]]:
+        """Every activity started from `start` to `end`, both included, page by page."""
+        found: list[dict[str, Any]] = []
+        while True:
+            page = self._get(ACTIVITIES_PATH, startDate=start, endDate=end,
+                             start=len(found), limit=ACTIVITY_PAGE_SIZE) or []
+            found += page
+            if len(page) < ACTIVITY_PAGE_SIZE:
+                return found
+
+    def daily_heart_rate(self, day: str) -> Any:
+        return self._get("/wellness-service/wellness/dailyHeartRate", date=day)
+
+    def hrv(self, day: str) -> Any:
+        return self._get(f"/hrv-service/hrv/{day}")
+
+    def heart_rate_zones(self) -> Any:
+        return self._get("/biometric-service/heartRateZones/v2")
 
 
 def _dig(payload: Any, *keys: str | int) -> Any:
@@ -73,8 +112,8 @@ def _latest_daily(
 ) -> Any:
     """Most recent value of a daily metric, walking back from `as_of`.
 
-    Stops at the first day that has one: Garmin rate-limits by IP, so calls we do not
-    need are calls we may not get back later.
+    Stops at the first day that has one: calls we do not need are calls a rate limit may
+    not give back later.
     """
     for offset in range(DAILY_LOOKBACK_DAYS):
         value = _dig(fetch((as_of - timedelta(days=offset)).isoformat()), *path)
@@ -102,110 +141,87 @@ def _to_activity(raw: dict[str, Any]) -> Activity:
     )
 
 
-def _training_loads(payload: Any) -> tuple[float | None, float | None]:
-    devices = _dig(payload, "mostRecentTrainingLoadBalance",
-                   "metricsTrainingLoadBalanceDTOMap")
-    if not isinstance(devices, dict):
-        return None, None
-    for entry in devices.values():
-        chronic = _dig(entry, "chronicTrainingLoad")
-        acute = _dig(entry, "acuteTrainingLoad")
-        if chronic is not None or acute is not None:
-            return chronic, acute
-    return None, None
-
-
-def _athlete_profile(client: GarminClient, resting_hr: int | None) -> AthleteProfile:
-    """The constants TRIMP needs, read from Garmin rather than asked of the athlete.
-
-    Max heart rate comes from the configured zones, which is where Garmin keeps it;
-    anything missing yields an unusable profile and therefore no load at all.
-    """
-    max_hr = _dig(client.get_heart_rate_zones(), 0, "maxHeartRateUsed")
-    gender = _dig(client.get_user_profile(), "userData", "gender")
-    return AthleteProfile(resting_hr=resting_hr, max_hr=max_hr,
-                          is_male=(gender != "FEMALE"))
+def _max_heart_rate(zones: Any) -> int | None:
+    """Max heart rate from the zones of the most specific sport that has one."""
+    if not isinstance(zones, list):
+        return None
+    by_sport = {_dig(zone, "sport"): _dig(zone, "maxHeartRateUsed") for zone in zones}
+    return next((by_sport[sport] for sport in ZONE_SPORTS_BY_PREFERENCE
+                 if by_sport.get(sport) is not None), None)
 
 
 def fetch_snapshot(
-    client: GarminClient, as_of: date, days: int, history_days: int = HISTORY_DAYS
+    client: GarminClient, as_of: date, days: int, is_male: bool | None = None,
+    history_days: int = HISTORY_DAYS,
 ) -> Snapshot:
     """Snapshot ending at `as_of`.
 
     Activities are read over `history_days` so the regime can see the athlete's real
-    history; volume and load are measured over the shorter `days` window. Any failure
-    becomes GarminReadError: a snapshot is all or nothing.
+    history; volume and load are measured over the shorter `days` window. `is_male` is
+    the athlete's declared sex: None leaves the load unknown. Any failure becomes
+    GarminReadError: a snapshot is all or nothing.
     """
     try:
-        return _read_snapshot(client, as_of, days, history_days)
-    except Exception as failure:  # the unofficial client raises several unrelated types
+        return _read_snapshot(client, as_of, days, is_male, history_days)
+    except Exception as failure:  # HTTP, decoding and payload errors share no base type
         raise GarminReadError(
             f"Garmin read failed ({type(failure).__name__}): {failure}") from failure
 
 
 def _read_snapshot(
-    client: GarminClient, as_of: date, days: int, history_days: int
+    client: GarminClient, as_of: date, days: int, is_male: bool | None, history_days: int
 ) -> Snapshot:
     start = (as_of - timedelta(days=history_days)).isoformat()
-    end = as_of.isoformat()
-    day = as_of.isoformat()
-
     activities = tuple(_to_activity(raw)
-                       for raw in client.get_activities_by_date(start, end))
-    resting = _latest_daily(client.get_rhr_day, as_of, "allMetrics", "metricsMap",
-                            "WELLNESS_RESTING_HEART_RATE", 0, "value")
-
-    chronic, acute = _training_loads(client.get_training_status(day))
-    if chronic is None or acute is None:
-        # Lifestyle watches do not report load; derive it from the activities instead.
-        acute, chronic = acute_chronic_load(activities, as_of,
-                                            _athlete_profile(client, resting))
-
+                       for raw in client.activities(start, as_of.isoformat()))
+    resting = _latest_daily(client.daily_heart_rate, as_of, "restingHeartRate")
+    profile = AthleteProfile(resting_hr=resting,
+                             max_hr=_max_heart_rate(client.heart_rate_zones()),
+                             is_male=is_male)
+    acute, chronic = acute_chronic_load(activities, as_of, profile)
     return Snapshot(
         as_of=as_of,
         activities=activities,
         chronic_load=chronic,
         acute_load=acute,
-        # Observed 2026-09-26 against a real account: get_max_metrics returns a list
-        # with one entry per user, not a dict.
-        vo2max=_latest_daily(client.get_max_metrics, as_of, 0, "generic",
-                             "vo2MaxPreciseValue"),
         resting_hr=resting,
-        hrv_status=_latest_daily(client.get_hrv_data, as_of, "hrvSummary", "status"),
+        hrv_status=_latest_daily(client.hrv, as_of, "hrvSummary", "status"),
         window_days=days,
         history_days=history_days,
     )
 
 
-def _garmin_login(
-    email: str, password: str, prompt_mfa: Callable[[], str] | None, tokenstore: str
-) -> Any:
-    """The one place that talks to the library, so tests can replace it."""
-    from garminconnect import Garmin
-
-    client = Garmin(email, password, prompt_mfa=prompt_mfa)
-    client.login(tokenstore)
-    return client
-
-
-def build_client(prompt_mfa: Callable[[], str] | None = None) -> Any:
-    """Authenticated Garmin client.
-
-    `prompt_mfa` is called only when Garmin asks for a one-time code, and the code is
-    the athlete's to supply — never this program's. It is asked once: `login` writes the
-    tokens to TOKEN_STORE and reuses them afterwards.
-
-    A missing credential raises MissingSettingError with the variable name; any login
-    failure becomes GarminAuthError. Both are reported by the CLI, never as a traceback.
-    """
-    email = required_setting("GARMIN_EMAIL")
-    password = required_setting("GARMIN_PASSWORD")
-    # Cached tokens win over the credentials above, so two athletes sharing a store
-    # means the second silently reads the first one's runs. One store per athlete.
-    token_store = os.environ.get(TOKEN_STORE_VARIABLE) or TOKEN_STORE
+def _bearer_token(session: requests.Session, key: str) -> str:
+    """Exchange the key for a token. No message built here contains the key."""
     try:
-        return _garmin_login(email, password, prompt_mfa, token_store)
-    except GarminAuthError:
-        raise
-    except Exception as failure:  # the unofficial client raises several unrelated types
-        raise GarminAuthError(f"Garmin login failed: {failure}") from failure
+        response = session.post(BASE_URL + TOKEN_PATH, timeout=REQUEST_TIMEOUT_S,
+                                headers={"Accept": "*/*", "Authorization": f"ApiKey {key}"})
+    except requests.RequestException as failure:
+        raise GarminAuthError(
+            f"Garmin could not be reached for a token ({type(failure).__name__})") from failure
+    if response.status_code in REFUSED_KEY_STATUSES:
+        raise GarminAuthError(
+            f"Garmin refused {API_KEY_VARIABLE} (HTTP {response.status_code}): it has "
+            f"expired or been revoked. Create a new one on Garmin Connect Web, page "
+            f"Personal API Key, and put it in .env.")
+    if not response.ok:
+        raise GarminAuthError(f"Garmin token request failed (HTTP {response.status_code})")
+    token = response.text.strip()
+    if not token:
+        raise GarminAuthError("Garmin answered the token request with an empty token")
+    return token
+
+
+def build_client() -> PersonalApiClient:
+    """Personal API client authenticated with this athlete's key.
+
+    A new token on every run: one request, and no token cache that two athletes on the
+    same computer could end up sharing. A missing key raises MissingSettingError with
+    the variable name; a refused one GarminAuthError. Both are reported by the CLI,
+    never as a traceback.
+    """
+    key = required_setting(API_KEY_VARIABLE)
+    session = requests.Session()
+    session.headers.update({"Accept": "application/json",
+                            "Authorization": f"Bearer {_bearer_token(session, key)}"})
+    return PersonalApiClient(session)

@@ -2,44 +2,35 @@ import json
 from datetime import date
 
 import pytest
+import requests
 from pathlib import Path
 
-from smart_coach.garmin_reader import fetch_snapshot
+from smart_coach import garmin_reader
+from smart_coach.config import MissingSettingError
+from smart_coach.garmin_reader import (ACTIVITY_PAGE_SIZE, GarminAuthError, GarminReadError,
+                                       PersonalApiClient, fetch_snapshot)
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "garmin_activities.json").read_text())
 
 
 class FakeGarmin:
-    """Stands in for the garminconnect client. Returns recorded shapes, never network."""
+    """Stands in for the Personal API client. Returns recorded shapes, never network."""
 
-    def __init__(self, *, training_status=None, vo2max=None, rhr=None, hrv=None,
-                 profile=None, zones=None):
-        self._training_status = training_status
-        self._vo2max = vo2max
+    def __init__(self, *, rhr=None, hrv=None, zones=None):
         self._rhr = rhr
         self._hrv = hrv
-        self._profile = profile
         self._zones = zones
 
-    def get_activities_by_date(self, start, end):
+    def activities(self, start, end):
         return FIXTURE["activities"]
 
-    def get_training_status(self, day):
-        return self._training_status
-
-    def get_max_metrics(self, day):
-        return self._vo2max
-
-    def get_rhr_day(self, day):
+    def daily_heart_rate(self, day):
         return self._rhr
 
-    def get_hrv_data(self, day):
+    def hrv(self, day):
         return self._hrv
 
-    def get_user_profile(self):
-        return self._profile
-
-    def get_heart_rate_zones(self):
+    def heart_rate_zones(self):
         return self._zones
 
 
@@ -61,42 +52,32 @@ def test_missing_metrics_become_none_not_zero():
     snapshot = fetch_snapshot(FakeGarmin(), as_of=date(2026, 9, 26), days=28)
     assert snapshot.chronic_load is None
     assert snapshot.acute_load is None
-    assert snapshot.vo2max is None
-    assert set(snapshot.missing_metrics) >= {"chronic_load", "acute_load", "vo2max"}
+    assert snapshot.resting_hr is None
+    assert set(snapshot.missing_metrics) == {"chronic_load", "acute_load", "resting_hr",
+                                             "hrv_status"}
 
 
 def test_present_metrics_are_extracted():
-    client = FakeGarmin(
-        training_status={"mostRecentTrainingLoadBalance": {"metricsTrainingLoadBalanceDTOMap": {
-            "device": {"monthlyLoadAerobicLow": 0, "chronicTrainingLoad": 412.5,
-                       "acuteTrainingLoad": 455.0}}}},
-        # Observed shape: get_max_metrics returns a LIST with one entry, not a dict.
-        vo2max=[{"userId": 1, "generic": {"vo2MaxPreciseValue": 51.4,
-                                          "vo2MaxValue": 51.0}}],
-        rhr={"allMetrics": {"metricsMap": {"WELLNESS_RESTING_HEART_RATE": [{"value": 48}]}}},
-        hrv={"hrvSummary": {"status": "BALANCED"}},
-    )
+    client = FakeGarmin(rhr={"restingHeartRate": 48, "maxHeartRate": 170},
+                        hrv={"hrvSummary": {"status": "BALANCED"}})
     snapshot = fetch_snapshot(client, as_of=date(2026, 9, 26), days=28)
-    assert snapshot.chronic_load == 412.5
-    assert snapshot.acute_load == 455.0
-    assert snapshot.vo2max == 51.4
     assert snapshot.resting_hr == 48
     assert snapshot.hrv_status == "BALANCED"
 
 
-# --- load derived from activities, because the watch does not compute it -------------
+# --- load derived from activities: Garmin's own is not exposed -----------------------
 
 VENU_LIKE = dict(
-    profile={"userData": {"gender": "MALE"}},
-    zones=[{"maxHeartRateUsed": 185}],
-    rhr={"allMetrics": {"metricsMap": {"WELLNESS_RESTING_HEART_RATE": [{"value": 50}]}}},
+    zones=[{"sport": "DEFAULT", "maxHeartRateUsed": 185}],
+    rhr={"restingHeartRate": 50},
 )
 
 
-def test_load_is_derived_when_the_watch_does_not_report_it():
+def test_load_is_derived_from_the_activities():
     """Both fixture runs fall inside the last 7 days, so the 7-day and 28-day means
     differ by exactly 28/7 — a relation that pins the windows, not just the numbers."""
-    snapshot = fetch_snapshot(FakeGarmin(**VENU_LIKE), as_of=date(2026, 9, 26), days=28)
+    snapshot = fetch_snapshot(FakeGarmin(**VENU_LIKE), as_of=date(2026, 9, 26), days=28,
+                              is_male=True)
 
     assert snapshot.chronic_load is not None
     assert snapshot.acute_load is not None
@@ -107,9 +88,28 @@ def test_load_is_derived_when_the_watch_does_not_report_it():
 def test_load_stays_none_when_the_profile_constants_are_unavailable():
     """Fail closed: no max heart rate means no TRIMP, and the guardrails fall back."""
     snapshot = fetch_snapshot(FakeGarmin(rhr=VENU_LIKE["rhr"]),
-                              as_of=date(2026, 9, 26), days=28)
+                              as_of=date(2026, 9, 26), days=28, is_male=True)
     assert snapshot.chronic_load is None
     assert snapshot.acute_load is None
+
+
+def test_load_stays_none_when_the_athlete_has_not_declared_their_sex():
+    snapshot = fetch_snapshot(FakeGarmin(**VENU_LIKE), as_of=date(2026, 9, 26), days=28)
+    assert (snapshot.acute_load, snapshot.chronic_load) == (None, None)
+
+
+def _chronic_with(zones) -> float | None:
+    client = FakeGarmin(rhr=VENU_LIKE["rhr"], zones=zones)
+    return fetch_snapshot(client, as_of=date(2026, 9, 26), days=28, is_male=True).chronic_load
+
+
+def test_the_running_zones_win_over_the_default_ones():
+    """The athlete may have set a running-specific max heart rate; it is the one their
+    runs were measured against."""
+    running = {"sport": "RUNNING", "maxHeartRateUsed": 185}
+    default = {"sport": "DEFAULT", "maxHeartRateUsed": 200}
+    assert _chronic_with([default, running]) == _chronic_with([running])
+    assert _chronic_with([default, running]) != _chronic_with([default])
 
 
 def test_history_is_fetched_over_a_longer_window_than_the_load():
@@ -117,13 +117,14 @@ def test_history_is_fetched_over_a_longer_window_than_the_load():
     asked = {}
 
     class Recording(FakeGarmin):
-        def get_activities_by_date(self, start, end):
+        def activities(self, start, end):
             asked["start"], asked["end"] = start, end
             return FIXTURE["activities"]
 
-    fetch_snapshot(Recording(**VENU_LIKE), as_of=date(2026, 9, 26), days=28,
-                   history_days=180)
+    snapshot = fetch_snapshot(Recording(**VENU_LIKE), as_of=date(2026, 9, 26), days=28,
+                              history_days=180)
     assert asked["start"] == "2026-03-30"
+    assert snapshot.history_days == 180
 
 
 # --- daily metrics are missing until the watch syncs ---------------------------------
@@ -136,36 +137,27 @@ class SyncLagging(FakeGarmin):
         super().__init__(**kwargs)
         self.rhr_calls = []
 
-    def get_rhr_day(self, day):
+    def daily_heart_rate(self, day):
         self.rhr_calls.append(day)
-        if day == "2026-09-26":
-            return {"allMetrics": {"metricsMap": {
-                "WELLNESS_RESTING_HEART_RATE": [{"value": 48}]}}}
-        return None
+        return {"restingHeartRate": 48} if day == "2026-09-26" else {}
 
-    def get_max_metrics(self, day):
-        return [{"generic": {"vo2MaxPreciseValue": 49.5}}] if day == "2026-09-25" else None
-
-    def get_hrv_data(self, day):
+    def hrv(self, day):
         return {"hrvSummary": {"status": "BALANCED"}} if day == "2026-09-24" else None
 
 
 def test_daily_metrics_fall_back_to_the_most_recent_day_that_has_them():
     """Run the command in the morning and today has nothing yet. Reading only `as_of`
     drops resting HR, and with it the whole load computation, without a word."""
-    snapshot = fetch_snapshot(
-        SyncLagging(profile=VENU_LIKE["profile"], zones=VENU_LIKE["zones"]),
-        as_of=date(2026, 9, 27), days=28)
+    snapshot = fetch_snapshot(SyncLagging(zones=VENU_LIKE["zones"]),
+                              as_of=date(2026, 9, 27), days=28, is_male=True)
 
     assert snapshot.resting_hr == 48
-    assert snapshot.vo2max == 49.5
     assert snapshot.hrv_status == "BALANCED"
     assert snapshot.missing_metrics == ()
 
 
 def test_the_lookback_stops_at_the_first_day_with_a_value():
-    """Garmin rate-limits by IP; walking further back than needed spends calls we may
-    not get back."""
+    """Calls we do not need are calls a rate limit may not give back later."""
     client = SyncLagging()
     fetch_snapshot(client, as_of=date(2026, 9, 27), days=28)
 
@@ -198,3 +190,115 @@ def test_an_activity_without_route_data_reports_it_as_missing_not_as_flat():
                            "activityType": {"typeKey": "treadmill_running"},
                            "distance": 5000.0, "duration": 1800.0, "averageHR": 140})
     assert (indoor.location, indoor.elevation_gain_m) == (None, None)
+
+
+# --- the HTTP client -----------------------------------------------------------------
+
+class FakeResponse:
+    def __init__(self, status_code=200, body=None, text=None):
+        self.status_code = status_code
+        self.ok = status_code < 400
+        self.text = text if text is not None else ("" if body is None else json.dumps(body))
+
+    def json(self):
+        return json.loads(self.text)
+
+    def raise_for_status(self):
+        if not self.ok:
+            raise requests.HTTPError(f"{self.status_code} Client Error")
+
+
+class FakeSession:
+    """Answers GETs from a queue and records what was asked."""
+
+    def __init__(self, *responses, token=FakeResponse(text="a.jwt.token")):
+        self._responses = list(responses)
+        self._token = token
+        self.headers = {}
+        self.gets, self.posts = [], []
+
+    def get(self, url, params=None, timeout=None):
+        self.gets.append((url, params))
+        return self._responses.pop(0)
+
+    def post(self, url, headers=None, timeout=None):
+        self.posts.append((url, headers))
+        if isinstance(self._token, Exception):
+            raise self._token
+        return self._token
+
+
+def test_activities_are_read_page_by_page_until_a_short_page():
+    """Garmin returns at most one page per call: stopping after the first would silently
+    drop the oldest runs, and with them the athlete's history."""
+    run = FIXTURE["activities"][0]
+    session = FakeSession(FakeResponse(body=[run] * ACTIVITY_PAGE_SIZE),
+                          FakeResponse(body=[run]))
+    found = PersonalApiClient(session).activities("2026-04-01", "2026-09-27")
+
+    assert len(found) == ACTIVITY_PAGE_SIZE + 1
+    assert [params["start"] for _, params in session.gets] == [0, ACTIVITY_PAGE_SIZE]
+    assert session.gets[0][1]["startDate"] == "2026-04-01"
+
+
+def test_a_day_without_data_reads_as_none():
+    """Garmin answers 204 with no body for a night without an HRV reading."""
+    session = FakeSession(FakeResponse(status_code=204, text=""))
+    assert PersonalApiClient(session).hrv("2026-09-27") is None
+
+
+def test_a_refused_read_fails_the_whole_snapshot_under_its_own_name():
+    session = FakeSession(FakeResponse(status_code=429))
+    with pytest.raises(GarminReadError, match="429"):
+        fetch_snapshot(PersonalApiClient(session), date(2026, 9, 27), 28)
+
+
+@pytest.fixture
+def session(monkeypatch):
+    """The session build_client opens, so the test can see what it sent."""
+    def open_session(token=FakeResponse(text="a.jwt.token")):
+        opened = FakeSession(token=token)
+        monkeypatch.setattr(garmin_reader.requests, "Session", lambda: opened)
+        return opened
+    monkeypatch.setenv("GARMIN_API_KEY", "the-athletes-key")
+    return open_session
+
+
+def test_the_key_is_exchanged_for_a_bearer_token(session):
+    opened = session()
+    garmin_reader.build_client()
+
+    assert opened.posts[0][1]["Authorization"] == "ApiKey the-athletes-key"
+    assert opened.headers["Authorization"] == "Bearer a.jwt.token"
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_refused_key_says_what_to_do_and_never_echoes_the_key(session, status):
+    session(token=FakeResponse(status_code=status, text="denied"))
+
+    with pytest.raises(GarminAuthError) as caught:
+        garmin_reader.build_client()
+    message = str(caught.value)
+    assert "GARMIN_API_KEY" in message and "Personal API" in message
+    assert "the-athletes-key" not in message
+
+
+def test_an_empty_token_is_an_auth_error_not_a_later_read_failure(session):
+    """Sent as `Bearer `, it would fail every read with a 401 that points at the data."""
+    session(token=FakeResponse(text="  \n"))
+
+    with pytest.raises(GarminAuthError, match="empty token"):
+        garmin_reader.build_client()
+
+
+def test_garmin_unreachable_is_an_auth_error_not_a_library_traceback(session):
+    session(token=requests.ConnectionError("no route to host"))
+
+    with pytest.raises(GarminAuthError, match="ConnectionError"):
+        garmin_reader.build_client()
+
+
+def test_a_missing_key_is_reported_by_name(monkeypatch):
+    monkeypatch.delenv("GARMIN_API_KEY", raising=False)
+    with pytest.raises(MissingSettingError, match="GARMIN_API_KEY"):
+        garmin_reader.build_client()

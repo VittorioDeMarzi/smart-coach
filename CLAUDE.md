@@ -33,7 +33,7 @@ the Garmin watch.
 | `config/rules.toml` | **all** the tunable rules: regime, guardrails. Nothing about an athlete |
 | `config/athlete.example.toml` | the empty model for `data/athlete.toml` |
 | `data/athlete.md` | stable profile: injuries, constraints, preferences, personal bests |
-| `data/athlete.toml` | this athlete's numbers: baseline floor, periods run without recording |
+| `data/athlete.toml` | this athlete's numbers: declared sex, baseline floor, periods run without recording |
 | `data/goal.md` | the goal of the current cycle |
 | `data/plan.md` | the plan, the whole cycle. Before rewriting it the skill shows what changes: that is the human veto |
 
@@ -43,19 +43,17 @@ git-ignored (only its `README.md` is tracked): see below.
 ## Another athlete
 
 The repository holds code, rules and the skill only. An athlete's data **stays on their
-machine** and is git-ignored: `.env`, everything in `data/`, plus the cached Garmin
-session. Another
-athlete runs `git clone`, fills in their own `.env` and starts `/coach`: the skill
-creates the files.
+machine** and is git-ignored: `.env` and everything in `data/`. Another athlete runs
+`git clone`, fills in their own `.env` and starts `/coach`: the skill creates the files.
 
 - **No backup and no git history of the plan.** The current plan survives on the Google
   Sheet and on intervals.icu; the profile is rebuilt by the intake. Whoever wants history
   and a backup runs `git init` inside `data/` and keeps it as a private repository of
   its own.
 - **Never add anything in `data/` to git**, not even with `-f`.
-- Two athletes on the same computer must each have their own `GARMIN_TOKEN_STORE` in
-  `.env`: cached tokens win over email and password, so with a shared folder the second
-  would silently read the first one's runs.
+- Garmin is read through the official, read-only Personal API with the athlete's own
+  `GARMIN_API_KEY` in `.env`: the key decides whose runs are read. Nothing is cached
+  between runs, so two clones with two keys cannot cross over.
 
 ## Setup
 
@@ -63,7 +61,7 @@ creates the files.
 python3 -m venv .venv
 .venv/bin/python -m pip install -e ".[dev]"
 cp .env.example .env   # then fill it in: credentials are read from here
-cp config/athlete.example.toml data/athlete.toml   # optional: without it, no floor and no data gap
+cp config/athlete.example.toml data/athlete.toml   # optional: without it, no floor, no data gap and no load
 ```
 
 The editable install is required: without it `src/` is on the path only inside pytest

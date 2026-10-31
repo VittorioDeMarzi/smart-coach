@@ -1,8 +1,10 @@
 """Training load derived from recorded activities.
 
-Lifestyle Garmin watches (the Venu series among them) do not compute acute and chronic
-training load — those are Forerunner/Fenix features. Everything the computation needs is
-in the activities we already read: duration and average heart rate.
+Garmin's Personal API does not expose Garmin's own acute and chronic training load, and
+lifestyle watches (the Venu series among them) do not compute it at all. Everything the
+computation needs is in the activities we already read: duration and average heart
+rate. One formula for every watch also keeps the chronic window comparable across a
+change of device.
 
 The method is Banister's TRIMP:
 
@@ -36,16 +38,18 @@ FEMALE_FACTOR, FEMALE_EXPONENT = 0.86, 1.67
 
 @dataclass(frozen=True)
 class AthleteProfile:
-    """The three constants TRIMP needs. Read from Garmin, not asked of the athlete."""
+    """The three constants TRIMP needs. The heart rates are read from Garmin; the sex is
+    declared by the athlete, because Garmin's Personal API does not expose it."""
 
     resting_hr: int | None
     max_hr: int | None
-    is_male: bool
+    is_male: bool | None
 
 
 def trimp(duration_s: int, avg_hr: float | None, profile: AthleteProfile) -> float | None:
     """Training impulse of one session, or None when it cannot be computed."""
-    if avg_hr is None or profile.resting_hr is None or profile.max_hr is None:
+    if (avg_hr is None or profile.resting_hr is None or profile.max_hr is None
+            or profile.is_male is None):
         return None
     span = profile.max_hr - profile.resting_hr
     if span <= 0:

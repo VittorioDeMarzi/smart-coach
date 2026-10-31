@@ -49,6 +49,13 @@ def test_an_unusable_profile_yields_no_load():
     assert trimp(duration_s=3600, avg_hr=None, profile=MALE) is None
 
 
+def test_an_undeclared_sex_yields_no_load_rather_than_the_male_formula():
+    """The two weightings differ by about 12% at the same heart rate: picking one is a
+    load the athlete may not have, presented as a measurement."""
+    unknown = AthleteProfile(resting_hr=50, max_hr=185, is_male=None)
+    assert trimp(duration_s=3600, avg_hr=150, profile=unknown) is None
+
+
 def test_max_below_resting_is_refused_rather_than_producing_a_negative_load():
     bad = AthleteProfile(resting_hr=190, max_hr=185, is_male=True)
     assert trimp(duration_s=3600, avg_hr=150, profile=bad) is None

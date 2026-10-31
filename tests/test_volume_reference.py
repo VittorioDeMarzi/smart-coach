@@ -37,7 +37,7 @@ def _ran(iso_week: int, km: float, weekday: int = 2) -> Activity:
 
 def _snapshot(*activities: Activity, as_of: date = SUNDAY_W39) -> Snapshot:
     return Snapshot(as_of=as_of, activities=activities, chronic_load=400.0,
-                    acute_load=420.0, vo2max=None, resting_hr=None, hrv_status=None)
+                    acute_load=420.0, resting_hr=None, hrv_status=None)
 
 
 def _severity(week, previous, snapshot, planned=()) -> Severity | None:

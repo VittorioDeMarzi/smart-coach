@@ -1,16 +1,15 @@
 """Nothing about one athlete may leak into another's plan.
 
-The rules are generic; three things are personal: the declared data gaps and baseline
-floors, the Garmin session, and the files the coach writes. Each has to be separable,
-because a plan built on someone else's history looks perfectly plausible.
+The rules are generic; three things are personal: the declared profile, data gaps and
+baseline floors, the Garmin key, and the files the coach writes. Each has to be
+separable, because a plan built on someone else's history looks perfectly plausible.
 """
 
 from datetime import date
 
 import pytest
 
-from smart_coach import garmin_reader
-from smart_coach.config import DataGap, load_config
+from smart_coach.config import ConfigError, DataGap, load_config
 from smart_coach.plan_writer import PlanNotFoundError, read_plan
 
 RULES = """
@@ -81,6 +80,23 @@ def test_a_new_athlete_has_no_floor_and_no_declared_gap(tmp_path, athlete_file):
     config = load_config(tmp_path / "rules.toml", athlete_path)
     assert (config.baseline.floor_weekly_km, config.baseline.floor_long_run_km) == (0, 0)
     assert config.history.data_gaps == ()
+    assert config.profile.is_male is None
+
+
+@pytest.mark.parametrize(("sex", "is_male"), [("male", True), ("female", False)])
+def test_the_declared_sex_is_read_from_the_athletes_file(tmp_path, sex, is_male):
+    """Garmin's Personal API does not expose it, and the load formula depends on it."""
+    (tmp_path / "rules.toml").write_text(RULES)
+    (tmp_path / "athlete.toml").write_text(f'[profile]\nsex = "{sex}"\n')
+    config = load_config(tmp_path / "rules.toml", tmp_path / "athlete.toml")
+    assert config.profile.is_male is is_male
+
+
+def test_a_sex_outside_the_two_formulas_is_refused_not_guessed(tmp_path):
+    (tmp_path / "rules.toml").write_text(RULES)
+    (tmp_path / "athlete.toml").write_text('[profile]\nsex = "M"\n')
+    with pytest.raises(ConfigError, match=r"athlete\.toml.*profile.*sex"):
+        load_config(tmp_path / "rules.toml", tmp_path / "athlete.toml")
 
 
 def test_the_cli_reads_the_athletes_file_from_the_data_folder(tmp_path, monkeypatch):
@@ -99,34 +115,6 @@ def test_athlete_numbers_left_in_the_rules_file_are_refused_not_ignored(tmp_path
         load_config(tmp_path / "rules.toml")
 
 
-# --- the Garmin session ---------------------------------------------------------------
-
-@pytest.fixture
-def login_calls(monkeypatch):
-    calls = []
-    monkeypatch.setattr(garmin_reader, "_garmin_login",
-                        lambda email, password, prompt, store: calls.append(store))
-    monkeypatch.setenv("GARMIN_EMAIL", "friend@example.com")
-    monkeypatch.setenv("GARMIN_PASSWORD", "not-a-real-password")
-    return calls
-
-
-def test_the_token_store_can_be_set_per_project(login_calls, monkeypatch):
-    """Cached tokens win over the credentials in .env. Two athletes sharing one store
-    means the second reads the first one's runs without any error."""
-    monkeypatch.setenv("GARMIN_TOKEN_STORE", "~/.config/smart-coach/friend-tokens")
-    garmin_reader.build_client()
-    assert login_calls == ["~/.config/smart-coach/friend-tokens"]
-
-
-@pytest.mark.parametrize("unset", [None, ""])
-def test_without_the_setting_the_default_store_is_used(login_calls, monkeypatch, unset):
-    if unset is not None:
-        monkeypatch.setenv("GARMIN_TOKEN_STORE", unset)
-    garmin_reader.build_client()
-    assert login_calls == [garmin_reader.TOKEN_STORE]
-
-
 # --- a fresh clone has no athlete files at all ---------------------------------------
 
 def test_the_example_athlete_file_declares_nothing(tmp_path):
@@ -135,6 +123,7 @@ def test_the_example_athlete_file_declares_nothing(tmp_path):
     config = load_config(tmp_path / "rules.toml", "config/athlete.example.toml")
     assert config.history.data_gaps == ()
     assert config.baseline.floor_weekly_km == 0.0
+    assert config.profile.sex is None
 
 
 def test_the_rules_shipped_with_the_project_load():

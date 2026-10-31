@@ -37,7 +37,7 @@ def _ran(day: date, km: float, hr: int | None = 140) -> Activity:
 
 def _snapshot(as_of: date, *activities: Activity, load: float | None = 400.0) -> Snapshot:
     return Snapshot(as_of=as_of, activities=activities, chronic_load=load,
-                    acute_load=load, vo2max=None, resting_hr=None, hrv_status=None)
+                    acute_load=load, resting_hr=None, hrv_status=None)
 
 
 def _found(violations) -> dict:
@@ -187,9 +187,9 @@ def test_r5_text_that_is_not_toml_is_a_config_error(tmp_path):
 @pytest.fixture
 def garmin_stub(monkeypatch):
     """A Garmin that answers with an empty history, so a command reaches its config."""
-    monkeypatch.setattr(cli, "build_client", lambda *args: object())
+    monkeypatch.setattr(cli, "build_client", lambda: object())
     monkeypatch.setattr(cli, "fetch_snapshot",
-                        lambda client, as_of, days: _snapshot(as_of))
+                        lambda client, as_of, days, **profile: _snapshot(as_of))
 
 
 def test_r5_the_cli_reports_a_broken_config_as_a_broken_config(
@@ -203,7 +203,7 @@ def test_r5_the_cli_reports_a_broken_config_as_a_broken_config(
 
 
 def test_r5_a_missing_setting_is_reported_by_name():
-    with pytest.raises(MissingSettingError, match="GARMIN_EMAIL"):
+    with pytest.raises(MissingSettingError, match="GARMIN_API_KEY"):
         garmin_reader.build_client()
 
 
@@ -219,7 +219,7 @@ def test_r5_an_unrelated_key_error_is_not_dressed_up_as_a_missing_setting(monkey
 # --- R6: Garmin failing after the login ----------------------------------------------
 
 class RateLimitedClient:
-    def get_activities_by_date(self, start, end):
+    def activities(self, start, end):
         raise RuntimeError("429 Too Many Requests")
 
 
@@ -229,7 +229,7 @@ def test_r6_a_failure_while_reading_garmin_has_a_name():
 
 
 def test_r6_the_cli_stops_with_that_message_instead_of_a_traceback(monkeypatch, capsys):
-    monkeypatch.setattr(cli, "build_client", lambda *args: RateLimitedClient())
+    monkeypatch.setattr(cli, "build_client", lambda: RateLimitedClient())
 
     assert cli.main(["snapshot"]) == 1
     assert "429" in capsys.readouterr().err

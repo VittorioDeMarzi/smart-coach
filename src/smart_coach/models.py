@@ -42,7 +42,6 @@ class Snapshot:
     activities: tuple[Activity, ...]
     chronic_load: float | None
     acute_load: float | None
-    vo2max: float | None
     resting_hr: int | None
     hrv_status: str | None
     window_days: int = 28
@@ -119,7 +118,7 @@ class Snapshot:
 
     @property
     def missing_metrics(self) -> tuple[str, ...]:
-        names = ("chronic_load", "acute_load", "vo2max", "resting_hr", "hrv_status")
+        names = ("chronic_load", "acute_load", "resting_hr", "hrv_status")
         return tuple(n for n in names if getattr(self, n) is None)
 
 

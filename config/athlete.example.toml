@@ -1,6 +1,12 @@
 # The numbers of ONE athlete. The rules, the same for everyone, live in rules.toml.
 # Copy this file to data/athlete.toml; the coach skill fills it in during the intake.
 
+[profile]
+# The load formula (Banister's TRIMP) differs by sex, and Garmin's Personal API does not
+# expose it. "male" or "female". Left out, no load is computed and the stricter absolute
+# caps apply instead.
+# sex = "female"
+
 [baseline]
 # Floor under the presumed baseline (spec 8.5): the watch is new, the athlete is not.
 # Filled in during the intake from the questions on personal bests and years of running.

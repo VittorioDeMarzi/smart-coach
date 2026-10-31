@@ -9,7 +9,7 @@ CONFIG = load_config("tests/fixtures/config.toml")
 
 def _snapshot(chronic: float | None, acute: float | None = 400.0) -> Snapshot:
     return Snapshot(as_of=date(2026, 9, 27), activities=(), chronic_load=chronic,
-                    acute_load=acute, vo2max=None, resting_hr=None, hrv_status=None)
+                    acute_load=acute, resting_hr=None, hrv_status=None)
 
 
 def _week(total_km: float, longest_km: float | None = None) -> Week:

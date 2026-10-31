@@ -26,7 +26,7 @@ def test_running_km_excludes_other_sports():
             Activity(day=date(2026, 9, 22), sport="walking", distance_km=5.0,
                      duration_s=3600, avg_hr=95),
         ),
-        chronic_load=420.0, acute_load=450.0, vo2max=51.0,
+        chronic_load=420.0, acute_load=450.0,
         resting_hr=48, hrv_status="balanced",
     )
     assert snapshot.running_km == 10.0
@@ -36,8 +36,7 @@ def test_days_of_data_spans_first_to_last_activity():
     snapshot = Snapshot(
         as_of=date(2026, 9, 26),
         activities=(_run(date(2026, 9, 1), 8.0), _run(date(2026, 9, 26), 8.0)),
-        chronic_load=None, acute_load=None, vo2max=None,
-        resting_hr=None, hrv_status=None,
+        chronic_load=None, acute_load=None,        resting_hr=None, hrv_status=None,
     )
     assert snapshot.days_of_data == 25
 
@@ -45,8 +44,7 @@ def test_days_of_data_spans_first_to_last_activity():
 def test_days_of_data_is_zero_without_activities():
     snapshot = Snapshot(
         as_of=date(2026, 9, 26), activities=(),
-        chronic_load=None, acute_load=None, vo2max=None,
-        resting_hr=None, hrv_status=None,
+        chronic_load=None, acute_load=None,        resting_hr=None, hrv_status=None,
     )
     assert snapshot.days_of_data == 0
 
@@ -85,8 +83,7 @@ def test_running_km_counts_only_the_load_window():
         as_of=date(2026, 9, 26),
         activities=(_run(date(2026, 6, 10), 20.0),   # months ago: history, not volume
                     _run(date(2026, 9, 20), 10.0)),
-        chronic_load=None, acute_load=None, vo2max=None,
-        resting_hr=None, hrv_status=None, window_days=28,
+        chronic_load=None, acute_load=None,        resting_hr=None, hrv_status=None, window_days=28,
     )
     assert snapshot.running_km == 10.0
     assert snapshot.weekly_running_km == 2.5
@@ -94,7 +91,7 @@ def test_running_km_counts_only_the_load_window():
 
 def _snapshot_on(as_of: date, history_days: int = 180) -> Snapshot:
     return Snapshot(as_of=as_of, activities=(_run(date(2026, 10, 21), 10.0),),
-                    chronic_load=None, acute_load=None, vo2max=None, resting_hr=None,
+                    chronic_load=None, acute_load=None, resting_hr=None,
                     hrv_status=None, history_days=history_days)
 
 
@@ -119,7 +116,6 @@ def test_days_of_data_spans_the_whole_history_not_just_the_window():
     snapshot = Snapshot(
         as_of=date(2026, 9, 26),
         activities=(_run(date(2026, 6, 4), 8.0), _run(date(2026, 9, 20), 8.0)),
-        chronic_load=None, acute_load=None, vo2max=None,
-        resting_hr=None, hrv_status=None, window_days=28,
+        chronic_load=None, acute_load=None,        resting_hr=None, hrv_status=None, window_days=28,
     )
     assert snapshot.days_of_data == 114

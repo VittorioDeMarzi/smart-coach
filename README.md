@@ -35,7 +35,7 @@ Garmin Connect ──read──▶ smart-coach ──plan──▶ intervals.icu
 | [Claude Code](https://claude.com/claude-code) with a Claude subscription | it is the coach's interface |
 | An [intervals.icu](https://intervals.icu) account | free |
 | Python 3.12 or newer, and git | |
-| A computer on a home network | Garmin blocks connections from cloud servers and from many VPNs |
+| A computer on a home network | Garmin blocked the old unofficial login from cloud servers; the Personal API has not been tried from one yet |
 | A Google account | only if you also want the plan on a Google Sheet |
 
 ## Installation
@@ -65,16 +65,22 @@ Every test must pass. They touch neither the network nor your accounts.
 cp .env.example .env
 ```
 
-`.env` stays on your computer only: git ignores it. Open it and fill in the first two
-lines with your Garmin Connect email and password:
+`.env` stays on your computer only: git ignores it. smart-coach reads Garmin through
+Garmin's official, read-only **Personal API**, with a key you create yourself:
+
+1. Log in to [Garmin Connect](https://connect.garmin.com) from a browser and open the
+   **Personal API Key** page (Garmin's
+   [Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api)
+   guide links to it).
+2. Create a key and choose how long it lasts (30 to 365 days). Garmin shows it **once**:
+   copy it straight into `.env`:
 
 ```
-GARMIN_EMAIL=...
-GARMIN_PASSWORD=...
+GARMIN_API_KEY=...
 ```
 
-The password is needed for the first login; after that the session is kept in
-`~/.garminconnect`.
+The key is as good as a password: do not paste it into a chat or a message. When it
+expires, the commands say so; create a new one and replace the line.
 
 ### 3. Connect intervals.icu
 
@@ -100,16 +106,11 @@ INTERVALS_API_KEY=...
 
 The API key is as good as a password: do not paste it into a chat or a message.
 
-### 4. First login to Garmin
-
-Run this command **in a real terminal**, not inside Claude:
+### 4. First read from Garmin
 
 ```bash
 .venv/bin/python -m smart_coach.cli snapshot
 ```
-
-If your account has two-step verification, Garmin sends you a code and the command asks
-for it. It happens once.
 
 If it works you see your data regime, your load and the runs of the last 28 days with
 pace, heart rate, climb and place. Check that they really are your runs.
@@ -252,9 +253,10 @@ All of them are preceded by `.venv/bin/python -m smart_coach.cli`.
 | Message | What it means | What to do |
 |---|---|---|
 | `Missing environment variable: ...` | that line is missing from `.env` | add it |
-| `Garmin asks for a verification code` | first login, or the session expired | run `snapshot` in a real terminal |
-| `Garmin login failed` | wrong email or password; if the text mentions 403 or 429, it is the network | check `.env`; in the second case turn the VPN off and use your home network |
+| `Garmin refused GARMIN_API_KEY` | the key expired, was revoked or was copied wrong | create a new key on Garmin Connect and replace the line in `.env` |
+| `Garmin could not be reached for a token` | no connection to Garmin | check the network and retry |
 | `Garmin read failed ... 429` | Garmin is rate-limiting you | wait an hour, do not insist |
+| `load not computed: declare [profile] sex` | `data/athlete.toml` does not say which load formula applies | add `sex = "male"` or `"female"` under `[profile]`, or run `/coach` |
 | `data/plan.md does not exist yet` | there is no plan yet | `/coach` |
 | `Week ... is not in the plan` | the plan does not hold that week | name the week with `--week`, or have the plan updated |
 | `plan.md line N: ...` | a line of the plan is malformed | fix that line, or ask the coach |
@@ -266,15 +268,13 @@ All of them are preceded by `.venv/bin/python -m smart_coach.cli`.
 
 - **Running only.** Gym, cycling and other sports enter as constraints, not into the
   plan.
-- **Unofficial access to Garmin.** Garmin has no public API for personal use: reading
-  goes through a community library and can break if Garmin changes something. Your
-  password sits in plain text in `.env`, on your computer.
+- **Garmin's Personal API is read-only and limited.** It exposes neither Garmin's own
+  training load nor VO2max: the load is derived from the duration and heart rate of each
+  run, the same way on every watch. Your key sits in plain text in `.env`, on your
+  computer, and expires on the date you chose.
 - **No Strava data**, by design: Strava's API policy forbids using its data with AI.
-- **One athlete per computer**, normally. For two people under the same user, each one
-  adds a `GARMIN_TOKEN_STORE=` line to `.env` with a different folder: otherwise the
-  second would read the first one's runs without noticing.
-- **Watches without training load** (the Venu series, for example): the load is derived
-  from the duration and heart rate of each run.
+- **One athlete per clone.** Each athlete has their own clone with their own `.env` and
+  their own key: the key decides whose runs are read.
 
 ## For those who want to change it
 

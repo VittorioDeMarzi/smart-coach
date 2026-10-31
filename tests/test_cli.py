@@ -4,7 +4,7 @@ from smart_coach.cli import validate_command
 from smart_coach.models import Regime, Snapshot, Step, Week, Workout
 
 SNAPSHOT = Snapshot(as_of=date(2026, 9, 27), activities=(), chronic_load=None,
-                    acute_load=None, vo2max=None, resting_hr=None, hrv_status=None)
+                    acute_load=None, resting_hr=None, hrv_status=None)
 
 
 def _week(total_km: float) -> Week:
@@ -67,7 +67,7 @@ def test_the_snapshot_lists_recent_runs_with_pace_place_and_climb():
                  duration_s=1500, avg_hr=140),
     )
     snapshot = Snapshot(as_of=date(2026, 9, 27), activities=runs, chronic_load=None,
-                        acute_load=None, vo2max=None, resting_hr=None, hrv_status=None)
+                        acute_load=None, resting_hr=None, hrv_status=None)
     assert cli.recent_runs_report(snapshot) == [
         "2026-09-02   8.0 km  6:02/km  HR 150  climb 140 m  Hillside",
         "2026-09-24  10.0 km  5:23/km  HR   ?  climb   ? m  ?",

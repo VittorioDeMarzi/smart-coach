@@ -20,14 +20,14 @@ def _snapshot(days: list[int], as_of: date = date(2026, 9, 30)) -> Snapshot:
                      distance_km=8.0, duration_s=1800, avg_hr=140)
             for d in sorted(days, reverse=True)
         ),
-        chronic_load=400.0, acute_load=420.0, vo2max=50.0,
+        chronic_load=400.0, acute_load=420.0,
         resting_hr=50, hrv_status="balanced",
     )
 
 
 def test_no_activities_is_cold():
     empty = Snapshot(as_of=date(2026, 9, 30), activities=(), chronic_load=None,
-                     acute_load=None, vo2max=None, resting_hr=None, hrv_status=None)
+                     acute_load=None, resting_hr=None, hrv_status=None)
     assert determine_regime(empty, CONFIG) is Regime.COLD
 
 

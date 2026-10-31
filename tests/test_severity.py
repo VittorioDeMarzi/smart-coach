@@ -30,7 +30,7 @@ def _week(total_km: float, longest_km: float | None = None) -> Week:
 
 def _snapshot(chronic, acute) -> Snapshot:
     return Snapshot(as_of=date(2026, 9, 27), activities=(), chronic_load=chronic,
-                    acute_load=acute, vo2max=None, resting_hr=None, hrv_status=None)
+                    acute_load=acute, resting_hr=None, hrv_status=None)
 
 
 def _by_rule(violations) -> dict:

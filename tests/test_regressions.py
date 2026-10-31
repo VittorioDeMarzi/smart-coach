@@ -37,7 +37,7 @@ def _week(total_km: float, longest_km: float, *, days=W40_DAYS, iso_week: int = 
 
 def _snapshot(chronic, acute, activities=()) -> Snapshot:
     return Snapshot(as_of=date(2026, 9, 27), activities=activities, chronic_load=chronic,
-                    acute_load=acute, vo2max=None, resting_hr=None, hrv_status=None)
+                    acute_load=acute, resting_hr=None, hrv_status=None)
 
 
 def _run(day: date, km: float) -> Activity:
@@ -307,9 +307,9 @@ def test_i3_a_missing_environment_variable_is_reported_not_raised(monkeypatch, c
 
     monkeypatch.setattr(cli, "DEFAULT_PLAN",
                         _plan_file(tmp_path, [((2026, 40), 10.0)]))
-    monkeypatch.delenv("GARMIN_EMAIL", raising=False)
+    monkeypatch.delenv("GARMIN_API_KEY", raising=False)
 
     code = cli.main(["validate", "--week", "40"])
 
     assert code == 1
-    assert "GARMIN_EMAIL" in capsys.readouterr().err
+    assert "GARMIN_API_KEY" in capsys.readouterr().err

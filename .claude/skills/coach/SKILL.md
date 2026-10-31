@@ -27,8 +27,8 @@ workout names follow the language the athlete writes in.
 2. **Always read the regime before planning**:
    `.venv/bin/python -m smart_coach.cli snapshot`
    In the `cold` regime, plan in bootstrap mode (see below).
-3. **Do not ask what the data already says.** Volume, paces, heart rate, VO2max and load
-   are read from the snapshot. Ask only about goals, constraints, preferences and pain.
+3. **Do not ask what the data already says.** Volume, paces, heart rate and load are
+   read from the snapshot. Ask only about goals, constraints, preferences and pain.
 4. **No Strava data**, in any form.
 5. **Write the whole cycle, publish one week at a time.** `plan.md` holds every week up
    to the race (see "The whole cycle"); only the coming one goes to intervals.icu.
@@ -101,6 +101,9 @@ Ask these questions one at a time:
    `[[history.data_gaps]]`. To Garmin a hole in the data and a hole in training look
    identical: without this declaration the system treats the athlete as returning from
    a layoff and the plan starts much easier than it should.
+9. **Sex, for the load formula** (male or female). Write it in `data/athlete.toml`
+   under `[profile]` as `sex = "male"` or `sex = "female"`. Garmin does not expose it,
+   and without it no load is computed: the stricter absolute caps apply instead.
 
 From answers 6 and 7, write `floor_weekly_km` and `floor_long_run_km` in
 `data/athlete.toml`, section `[baseline]`: the floor that stops Garmin from
@@ -108,7 +111,7 @@ underestimating an athlete with a new watch (spec 8.5).
 
 `data/athlete.toml` holds only this athlete's numbers. **Never write athlete data in
 `config/rules.toml`**: that file holds the rules, the same for everyone, and loading
-refuses a rules file that contains `[baseline]` or `[history]`.
+refuses a rules file that contains `[baseline]`, `[history]` or `[profile]`.
 
 **The athlete's files are not in the repository.** Everything in `data/` —
 `athlete.md`, `athlete.toml`, `goal.md`, `plan.md` — stays on the athlete's machine
@@ -124,8 +127,7 @@ There is no git history of the plan to fall back on: this comparison is their ve
 `data/athlete.toml` already hold a profile, ask whether it belongs to the person you are
 talking to: a plan built on someone else's injuries and history is plausible and wrong.
 The same goes for the snapshot: if places and volumes do not match what the athlete
-tells you, stop and say so — it may be another account's Garmin session (see
-`GARMIN_TOKEN_STORE` in the README).
+tells you, stop and say so — `GARMIN_API_KEY` in `.env` may be another account's key.
 
 ## Phase 1 — Cycle (at every goal, writes `data/goal.md`)
 
@@ -140,7 +142,7 @@ tells you, stop and say so — it may be another account's Garmin session (see
 8. Non-negotiable sessions (for example a Thursday group run).
 
 Then **a confirmation**, not a question: present the summary of the snapshot (runs,
-volume, longest run, VO2max, load) and ask the athlete to correct it.
+volume, longest run, load) and ask the athlete to correct it.
 In the `cold` regime there is nothing to confirm: ask instead for current weekly volume,
 longest recent run, perceived easy pace, recent races.
 

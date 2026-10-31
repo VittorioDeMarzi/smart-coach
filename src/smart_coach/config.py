@@ -12,7 +12,9 @@ from typing import Any, Callable, TypeVar
 
 # What belongs to one athlete and not to the rules: a separate file, so a copy of the
 # project for someone else starts without it.
-ATHLETE_SECTIONS = ("baseline", "history")
+ATHLETE_SECTIONS = ("baseline", "history", "profile")
+# The two load formulas there are (load.py): anything else has no formula to pick.
+SEXES = ("male", "female")
 T = TypeVar("T")
 
 
@@ -72,12 +74,28 @@ class Baseline:
 
 
 @dataclass(frozen=True)
+class Profile:
+    """What the load formula needs and Garmin's Personal API does not expose.
+
+    Undeclared means no load at all, never the male formula by default: the two
+    weightings differ, and a guessed load would pass for a measured one.
+    """
+
+    sex: str | None = None
+
+    @property
+    def is_male(self) -> bool | None:
+        return None if self.sex is None else self.sex == "male"
+
+
+@dataclass(frozen=True)
 class Config:
     regime: RegimeConfig
     guardrails: GuardrailConfig
     workout: WorkoutConfig
     baseline: Baseline
     history: HistoryConfig = HistoryConfig()
+    profile: Profile = Profile()
 
 
 class ConfigError(ValueError):
@@ -130,20 +148,30 @@ def _section(raw: dict[str, Any], name: str, kind: Callable[..., T], path: Path)
     return _build(kind, raw[name], path, name)
 
 
-def _load_athlete(path: Path | None) -> tuple[Baseline, HistoryConfig]:
+def _load_profile(raw: dict[str, Any], path: Path) -> Profile:
+    profile = _build(Profile, raw.get("profile", {}), path, "profile")
+    if profile.sex is not None and profile.sex not in SEXES:
+        raise ConfigError(f"{path}: section [profile]: sex must be one of {SEXES}, "
+                          f"not {profile.sex!r}")
+    return profile
+
+
+def _load_athlete(path: Path | None) -> tuple[Baseline, HistoryConfig, Profile]:
     """The athlete's own numbers, kept apart from the rules so the rules can be handed
     to someone else.
 
-    No file is a new athlete: no floor and no declared gap. That is the strictest
-    reading, since a floor can only loosen a cap and a gap can only lengthen the history.
+    No file is a new athlete: no floor, no declared gap, no declared sex. That is the
+    strictest reading: a floor can only loosen a cap, a gap can only lengthen the
+    history, and without a sex there is no load, so the absolute caps apply.
     """
     if path is None or not path.exists():
-        return Baseline(), HistoryConfig()
+        return Baseline(), HistoryConfig(), Profile()
     raw = _read_toml(path)
     gaps = raw.get("history", {}).get("data_gaps", ())
     return (_build(Baseline, raw.get("baseline", {}), path, "baseline"),
             HistoryConfig(data_gaps=tuple(
-                _build(DataGap, gap, path, "history.data_gaps") for gap in gaps)))
+                _build(DataGap, gap, path, "history.data_gaps") for gap in gaps)),
+            _load_profile(raw, path))
 
 
 def load_config(path: str | Path, athlete_path: str | Path | None = None) -> Config:
@@ -160,11 +188,12 @@ def load_config(path: str | Path, athlete_path: str | Path | None = None) -> Con
         # Ignoring them would silently drop a declared gap and plan for a beginner.
         raise ConfigError(f"{rules_path}: {misplaced} belong in the athlete's own "
                           f"athlete.toml, not in the rules")
-    baseline, history = _load_athlete(Path(athlete_path) if athlete_path else None)
+    baseline, history, profile = _load_athlete(Path(athlete_path) if athlete_path else None)
     return Config(
         regime=_section(raw, "regime", RegimeConfig, rules_path),
         guardrails=_section(raw, "guardrails", GuardrailConfig, rules_path),
         workout=_section(raw, "workout", WorkoutConfig, rules_path),
         baseline=baseline,
         history=history,
+        profile=profile,
     )

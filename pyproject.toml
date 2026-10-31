@@ -2,7 +2,7 @@
 name = "smart-coach"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["garminconnect", "requests", "python-dotenv", "gspread>=6.2"]
+dependencies = ["requests", "python-dotenv", "gspread>=6.2"]
 
 [project.optional-dependencies]
 dev = ["pytest", "responses"]

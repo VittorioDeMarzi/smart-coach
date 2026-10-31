@@ -6,7 +6,7 @@ from smart_coach.models import Regime, Snapshot, Step, Week, Workout
 
 CONFIG = load_config("tests/fixtures/config.toml")
 EMPTY_SNAPSHOT = Snapshot(as_of=date(2026, 9, 27), activities=(), chronic_load=None,
-                          acute_load=None, vo2max=None, resting_hr=None, hrv_status=None)
+                          acute_load=None, resting_hr=None, hrv_status=None)
 
 
 def _workout(day: date, km: float, quality: bool = False) -> Workout:

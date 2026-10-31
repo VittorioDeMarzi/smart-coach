@@ -1,7 +1,7 @@
 """Test isolation.
 
 The CLI loads credentials from .env, so without this every test run on a developer
-machine would read real credentials and attempt real Garmin logins. The suite must be
+machine would read real credentials and attempt real Garmin calls. The suite must be
 hermetic: no real secrets, no network.
 """
 
@@ -9,8 +9,7 @@ import pytest
 
 from smart_coach import cli
 
-CREDENTIALS = ("GARMIN_EMAIL", "GARMIN_PASSWORD", "GARMIN_TOKEN_STORE",
-               "INTERVALS_ATHLETE_ID", "INTERVALS_API_KEY",
+CREDENTIALS = ("GARMIN_API_KEY", "INTERVALS_ATHLETE_ID", "INTERVALS_API_KEY",
                "GOOGLE_SHEET_ID", "GOOGLE_SERVICE_ACCOUNT_FILE")
 
 
