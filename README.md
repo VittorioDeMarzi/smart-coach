@@ -32,6 +32,7 @@ Garmin Connect ──read──▶ smart-coach ──plan──▶ intervals.icu
 | | |
 |---|---|
 | A Garmin watch and a Garmin Connect account | with a few weeks of recorded runs, if possible |
+| A Garmin Personal API key | free, created from your Garmin Connect account in two minutes (step 2) |
 | [Claude Code](https://claude.com/claude-code) with a Claude subscription | it is the coach's interface |
 | An [intervals.icu](https://intervals.icu) account | free |
 | Python 3.12 or newer, and git | |
@@ -59,28 +60,33 @@ Check that everything is in place:
 
 Every test must pass. They touch neither the network nor your accounts.
 
-### 2. Create the credentials file
+### 2. Create the credentials file and the Garmin key
 
 ```bash
 cp .env.example .env
 ```
 
-`.env` stays on your computer only: git ignores it. smart-coach reads Garmin through
-Garmin's official, read-only **Personal API**, with a key you create yourself:
+`.env` stays on your computer only: git ignores it.
 
-1. Log in to [Garmin Connect](https://connect.garmin.com) from a browser and open the
-   **Personal API Key** page (Garmin's
-   [Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api)
-   guide links to it).
-2. Create a key and choose how long it lasts (30 to 365 days). Garmin shows it **once**:
-   copy it straight into `.env`:
+smart-coach reads your runs through Garmin's official, read-only **Personal API**. It
+needs a key that you create yourself, from a browser:
+
+1. Open the [Personal API Key](https://connect.garmin.com/app/settings/personalApiToken)
+   page, logged in to Garmin Connect.
+2. Select **Create Key**.
+3. Read and accept the terms and conditions.
+4. Choose how long the key lasts: 30, 90, 180 or 365 days. Then select **Create**.
+5. Garmin shows the key **once**: copy it straight into `.env`, then select **Done**.
 
 ```
 GARMIN_API_KEY=...
 ```
 
 The key is as good as a password: do not paste it into a chat or a message. When it
-expires, the commands say so; create a new one and replace the line.
+expires, the commands say so: create a new one the same way and replace the line. Garmin's
+own instructions are on the
+[Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api)
+page.
 
 ### 3. Connect intervals.icu
 
