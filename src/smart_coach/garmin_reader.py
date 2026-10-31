@@ -15,16 +15,13 @@ from typing import Any, Callable, Protocol
 
 from smart_coach.config import required_setting
 from smart_coach.load import AthleteProfile, acute_chronic_load
-from smart_coach.models import Activity, Snapshot
+from smart_coach.models import HISTORY_DAYS, Activity, Snapshot
 
 METRES_PER_KM = 1000.0
 # Garmin's own default location. Tokens land here after the first login and refresh
 # themselves, so a multi-factor code is asked once rather than on every run.
 TOKEN_STORE = "~/.garminconnect"
 TOKEN_STORE_VARIABLE = "GARMIN_TOKEN_STORE"
-# Load needs 28 days; how long the athlete has been recording needs much more, or the
-# regime is capped by the window and reads WARM forever (spec 8.2).
-HISTORY_DAYS = 180
 # Wellness data for today is absent until the watch syncs, so every daily metric is
 # looked up backwards from as_of until one has a value. These metrics move slowly:
 # yesterday's resting heart rate is a good answer, silently dropping it is not.
@@ -176,6 +173,7 @@ def _read_snapshot(
         resting_hr=resting,
         hrv_status=_latest_daily(client.get_hrv_data, as_of, "hrvSummary", "status"),
         window_days=days,
+        history_days=history_days,
     )
 
 

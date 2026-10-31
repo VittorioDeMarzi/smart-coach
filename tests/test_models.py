@@ -92,6 +92,27 @@ def test_running_km_counts_only_the_load_window():
     assert snapshot.weekly_running_km == 2.5
 
 
+def _snapshot_on(as_of: date, history_days: int = 180) -> Snapshot:
+    return Snapshot(as_of=as_of, activities=(_run(date(2026, 10, 21), 10.0),),
+                    chronic_load=None, acute_load=None, vo2max=None, resting_hr=None,
+                    hrv_status=None, history_days=history_days)
+
+
+def test_an_elapsed_week_inside_the_history_with_no_run_is_a_measured_zero():
+    assert _snapshot_on(date(2026, 11, 1)).running_km_in_iso_week(2026, 44) == 0.0
+
+
+def test_a_week_not_yet_over_with_no_run_is_missing():
+    assert _snapshot_on(date(2026, 10, 31)).running_km_in_iso_week(2026, 44) is None
+
+
+def test_a_week_older_than_the_history_is_missing():
+    """History starts on 2026-10-28, after the Monday of W44: the fetch never asked
+    Garmin about that Monday or the day after."""
+    assert _snapshot_on(date(2026, 11, 1), history_days=4) \
+        .running_km_in_iso_week(2026, 44) is None
+
+
 def test_days_of_data_spans_the_whole_history_not_just_the_window():
     """Reading 28 days and then measuring history inside them can never exceed 28: the
     athlete would read WARM forever however long they have been recording."""

@@ -89,6 +89,27 @@ def test_after_two_light_weeks_more_than_the_level_held_before_them_blocks():
                      _snapshot(*AFTER_A_TRIP)) is Severity.BLOCK
 
 
+# --- after a week skipped entirely ---------------------------------------------------
+
+BEFORE_THE_INJURY = (_ran(41, 30.0), _ran(42, 30.0), _ran(43, 20.0))  # W44: nothing
+SUNDAY_W44 = _monday(44) + timedelta(days=6)
+
+
+def test_a_skipped_week_is_measured_from_what_was_run_not_from_the_plan():
+    """W44 planned 32 km, run 0. Measured from the plan, 34 km passes clean; measured
+    from the 20 km average, it exceeds the ramp and the 30 km peak alike."""
+    assert _severity(_week(45, 12.0, 10.0, 12.0), _week(44, 10.0, 10.0, 12.0),
+                     _snapshot(*BEFORE_THE_INJURY, as_of=SUNDAY_W44)) is Severity.BLOCK
+
+
+def test_a_week_not_yet_over_still_counts_for_what_is_planned():
+    """Saturday of W44: Sunday's 12 km may still be run, so the plan stays the
+    reference (32 km) and 34 km is within the ramp."""
+    saturday = SUNDAY_W44 - timedelta(days=1)
+    assert _severity(_week(45, 12.0, 10.0, 12.0), _week(44, 10.0, 10.0, 12.0),
+                     _snapshot(*BEFORE_THE_INJURY, as_of=saturday)) is None
+
+
 # --- the first week of a plan --------------------------------------------------------
 
 UNEVEN_MONTH = (_ran(36, 8.0), _ran(37, 32.0), _ran(38, 14.0), _ran(39, 16.0))

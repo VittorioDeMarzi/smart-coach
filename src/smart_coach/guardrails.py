@@ -135,7 +135,9 @@ def _previous_week_km(previous_week: Week | None, snapshot: Snapshot) -> float:
     """The smaller of planned and actually run.
 
     Comparing the plan against the plan is circular: a week the athlete only half
-    completed would licence a rise measured from volume they never ran.
+    completed would licence a rise measured from volume they never ran. A week skipped
+    entirely counts as zero once it is over (see `running_km_in_iso_week`); the plan
+    stands in only while the actual is unknown.
     """
     if previous_week is None:
         return 0.0

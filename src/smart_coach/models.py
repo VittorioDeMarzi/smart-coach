@@ -7,6 +7,9 @@ from datetime import date, timedelta
 from enum import Enum
 
 RUNNING_SPORT = "running"
+# Load needs 28 days; how long the athlete has been recording needs much more, or the
+# regime is capped by the window and reads WARM forever (spec 8.2).
+HISTORY_DAYS = 180
 
 
 class Regime(Enum):
@@ -43,6 +46,8 @@ class Snapshot:
     resting_hr: int | None
     hrv_status: str | None
     window_days: int = 28
+    # How far back before `as_of` the activities were fetched.
+    history_days: int = HISTORY_DAYS
 
     @property
     def running_km(self) -> float:
@@ -94,12 +99,23 @@ class Snapshot:
                     if a.sport == RUNNING_SPORT and first <= a.day <= last), default=0.0)
 
     def running_km_in_iso_week(self, iso_year: int, iso_week: int) -> float | None:
-        """Kilometres actually run in that ISO week, or None when the window has no
-        running activity in it at all — absent data must not read as a zero week."""
+        """Kilometres actually run in that ISO week, or None when that is unknown.
+
+        No running activity is a measured zero only for a week that is over and lies
+        inside the history: Garmin was asked for every activity from
+        `as_of - history_days` to `as_of`, so a week in that range with nothing in it is
+        a week not run. A week still in progress may yet be run, and one older than the
+        history was never asked about: for those, absent data must not read as zero.
+        """
         matching = [a.distance_km for a in self.activities
                     if a.sport == RUNNING_SPORT
                     and a.day.isocalendar()[:2] == (iso_year, iso_week)]
-        return sum(matching) if matching else None
+        if matching:
+            return sum(matching)
+        monday = date.fromisocalendar(iso_year, iso_week, 1)
+        sunday = monday + timedelta(days=6)
+        covered = self.as_of - timedelta(days=self.history_days) <= monday
+        return 0.0 if covered and sunday <= self.as_of else None
 
     @property
     def missing_metrics(self) -> tuple[str, ...]:
