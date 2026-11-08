@@ -1,0 +1,34 @@
+.claude/skills/coach/SKILL.md
+  h_c9ac55b9f06bc8 59-73
+README.md
+  h_c9ac55b9f06bc8 122-123
+docs/design.md
+  h_c9ac55b9f06bc8 140,151-161
+pyproject.toml
+  h_c9ac55b9f06bc8 5
+src/smart_coach/cli.py
+  h_c9ac55b9f06bc8 13-14,42,44,155,196-205,211,218-219,229
+src/smart_coach/drift.py
+  h_c9ac55b9f06bc8 1-176
+src/smart_coach/garmin_reader.py
+  h_c9ac55b9f06bc8 27-28,64,68,80-86,106-109,155
+src/smart_coach/models.py
+  h_c9ac55b9f06bc8 34-44
+tests/test_cli.py
+  h_c9ac55b9f06bc8 71-73,75-102
+tests/test_drift.py
+  h_c9ac55b9f06bc8 1-202
+tests/test_garmin_reader.py
+  h_c9ac55b9f06bc8 19,23,26,37-39,202,206,225,255-269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1552c3a791b2842641035e2fda812fe16919b63c",
+  "prompts": {},
+  "humans": {
+    "h_c9ac55b9f06bc8": {
+      "author": "Vittorio De Marzi <vittorio.demarzi90@gmail.com>"
+    }
+  }
+}
