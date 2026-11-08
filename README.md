@@ -119,7 +119,8 @@ The API key is as good as a password: do not paste it into a chat or a message.
 ```
 
 If it works you see your data regime, your load and the runs of the last 28 days with
-pace, heart rate, climb and place. Check that they really are your runs.
+pace, heart rate, climb, heart-rate drift and place. Check that they really are your
+runs. Drift is measured only on continuous runs of an hour or more; the others show `-`.
 
 ### 5. Google Sheet (optional)
 

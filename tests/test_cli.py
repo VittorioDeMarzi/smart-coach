@@ -68,7 +68,35 @@ def test_the_snapshot_lists_recent_runs_with_pace_place_and_climb():
     )
     snapshot = Snapshot(as_of=date(2026, 9, 27), activities=runs, chronic_load=None,
                         acute_load=None, resting_hr=None, hrv_status=None)
-    assert cli.recent_runs_report(snapshot) == [
-        "2026-09-02   8.0 km  6:02/km  HR 150  climb 140 m  Hillside",
-        "2026-09-24  10.0 km  5:23/km  HR   ?  climb   ? m  ?",
+    assert cli.recent_runs_report(snapshot, {}) == [
+        "2026-09-02   8.0 km  6:02/km  HR 150  climb 140 m  drift      -  Hillside",
+        "2026-09-24  10.0 km  5:23/km  HR   ?  climb   ? m  drift      -  ?",
     ]
+
+
+def test_the_drift_column_tells_measured_unmeasured_and_missing_apart():
+    """A run not measured prints `-`, a measurement that failed `?`: neither is zero."""
+    from smart_coach import cli
+    from smart_coach.models import Activity
+
+    runs = tuple(Activity(day=date(2026, 9, day), sport="running", distance_km=10.0,
+                          duration_s=3300, avg_hr=140, activity_id=activity_id)
+                 for day, activity_id in ((20, 1), (22, 2), (24, 3), (26, None)))
+    snapshot = Snapshot(as_of=date(2026, 9, 27), activities=runs, chronic_load=None,
+                        acute_load=None, resting_hr=None, hrv_status=None)
+    report = cli.recent_runs_report(snapshot, {1: 2.14, 2: -0.4, 3: None})
+    assert [line.split("drift")[1].split()[0] for line in report] == [
+        "+2.1%", "-0.4%", "?", "-"]
+
+
+def test_a_two_digit_drift_keeps_the_column_aligned():
+    from smart_coach import cli
+    from smart_coach.models import Activity
+
+    runs = tuple(Activity(day=date(2026, 9, day), sport="running", distance_km=15.0,
+                          duration_s=5400, avg_hr=150, location="Berlin", activity_id=day)
+                 for day in (20, 24))
+    snapshot = Snapshot(as_of=date(2026, 9, 27), activities=runs, chronic_load=None,
+                        acute_load=None, resting_hr=None, hrv_status=None)
+    report = cli.recent_runs_report(snapshot, {20: -12.3, 24: 2.1})
+    assert len({line.index("Berlin") for line in report}) == 1

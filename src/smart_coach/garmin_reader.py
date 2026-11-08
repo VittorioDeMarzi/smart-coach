@@ -24,6 +24,8 @@ METRES_PER_KM = 1000.0
 BASE_URL = "https://personal.connectapi.garmin.com"
 TOKEN_PATH = "/personalapitoken-service/personal-api/personal-api-key/token"
 ACTIVITIES_PATH = "/activitylist-service/activities/search/activities"
+# A ZIP holding the activity's original FIT file.
+ACTIVITY_FILE_PATH = "/download-service/files/activity/{activity_id}"
 API_KEY_VARIABLE = "GARMIN_API_KEY"
 REQUEST_TIMEOUT_S = 30
 # The API's own default page size; a page shorter than this is the last one.
@@ -59,10 +61,11 @@ class GarminClient(Protocol):
     def daily_heart_rate(self, day: str) -> Any: ...
     def hrv(self, day: str) -> Any: ...
     def heart_rate_zones(self) -> Any: ...
+    def activity_fit(self, activity_id: int) -> bytes: ...
 
 
 class PersonalApiClient:
-    """The four Personal API reads a snapshot needs, over an authenticated session."""
+    """The Personal API reads a snapshot needs, over an authenticated session."""
 
     def __init__(self, session: requests.Session) -> None:
         self._session = session
@@ -73,6 +76,13 @@ class PersonalApiClient:
                                      timeout=REQUEST_TIMEOUT_S)
         response.raise_for_status()
         return response.json() if response.text.strip() else None
+
+    def _get_bytes(self, path: str) -> bytes:
+        """The raw body of a file download."""
+        response = self._session.get(BASE_URL + path, headers={"Accept": "*/*"},
+                                     timeout=REQUEST_TIMEOUT_S)
+        response.raise_for_status()
+        return response.content
 
     def activities(self, start: str, end: str) -> list[dict[str, Any]]:
         """Every activity started from `start` to `end`, both included, page by page."""
@@ -92,6 +102,10 @@ class PersonalApiClient:
 
     def heart_rate_zones(self) -> Any:
         return self._get("/biometric-service/heartRateZones/v2")
+
+    def activity_fit(self, activity_id: int) -> bytes:
+        """The activity's download: a ZIP holding its FIT file."""
+        return self._get_bytes(ACTIVITY_FILE_PATH.format(activity_id=activity_id))
 
 
 def _dig(payload: Any, *keys: str | int) -> Any:
@@ -138,6 +152,7 @@ def _to_activity(raw: dict[str, Any]) -> Activity:
         avg_hr=raw.get("averageHR"),
         location=raw.get("locationName"),
         elevation_gain_m=raw.get("elevationGain"),
+        activity_id=raw.get("activityId"),
     )
 
 

@@ -10,7 +10,8 @@ from dotenv import load_dotenv
 
 from smart_coach.config import (Config, ConfigError, MissingSettingError, load_config,
                                 required_setting)
-from smart_coach.garmin_reader import GarminError, build_client, fetch_snapshot
+from smart_coach.drift import run_drifts
+from smart_coach.garmin_reader import GarminClient, GarminError, build_client, fetch_snapshot
 from smart_coach.guardrails import blocking, validate, validate_structure
 from smart_coach.intervals_pusher import PushResult, push_week
 from smart_coach.models import (Activity, Plan, Regime, Severity, Snapshot, Week,
@@ -38,9 +39,9 @@ def _config(rules_path: str) -> Config:
     return load_config(rules_path, DEFAULT_ATHLETE)
 
 
-def _today_snapshot(config: Config) -> Snapshot:
+def _today_snapshot(config: Config, client: GarminClient) -> Snapshot:
     """What Garmin knows today, with the load computed for the athlete's declared sex."""
-    return fetch_snapshot(build_client(), date.today(), SNAPSHOT_DAYS,
+    return fetch_snapshot(client, date.today(), SNAPSHOT_DAYS,
                           is_male=config.profile.is_male)
 
 
@@ -151,7 +152,7 @@ def _load_state(plan_path: str, week_number: int | None, iso_year: int | None):
     plan = read_plan(plan_path)
     index = select_week_index(plan, week_number, iso_year, date.today())
     config = _config(DEFAULT_CONFIG)
-    snapshot = _today_snapshot(config)
+    snapshot = _today_snapshot(config, build_client())
     return plan, index, snapshot, determine_regime(snapshot, config)
 
 
@@ -192,20 +193,30 @@ def _or_unknown(value) -> str:
     return "?" if value is None else f"{value:.0f}"
 
 
-def recent_runs_report(snapshot: Snapshot) -> list[str]:
+def _drift(run: Activity, drifts: dict[int, float | None]) -> str:
+    """`-` for a run not measured (too short, not continuous, no id), `?` for one that
+    should have been and could not be."""
+    if run.activity_id not in drifts:
+        return "-"
+    value = drifts[run.activity_id]
+    return "?" if value is None else f"{value:+.1f}%"
+
+
+def recent_runs_report(snapshot: Snapshot, drifts: dict[int, float | None]) -> list[str]:
     """One line per run in the load window, with the context a pace needs to be read:
     a missing value prints as `?`, never as zero."""
     return [
         f"{run.day}  {run.distance_km:4.1f} km  {_pace(run)}/km  "
         f"HR {_or_unknown(run.avg_hr):>3}  climb {_or_unknown(run.elevation_gain_m):>3} m  "
-        f"{run.location or '?'}"
+        f"drift {_drift(run, drifts):>6}  {run.location or '?'}"
         for run in snapshot.recent_runs
     ]
 
 
 def _snapshot_command() -> int:
     config = _config(DEFAULT_CONFIG)
-    snapshot = _today_snapshot(config)
+    client = build_client()
+    snapshot = _today_snapshot(config, client)
     regime = determine_regime(snapshot, config)
     print(f"regime: {regime.value} | days of data: {snapshot.days_of_data} | "
           f"running km: {snapshot.running_km:.1f}")
@@ -215,7 +226,7 @@ def _snapshot_command() -> int:
         print(f"load not computed: declare [profile] sex in {DEFAULT_ATHLETE}")
     print(f"resting HR: {snapshot.resting_hr} | HRV: {snapshot.hrv_status}")
     print(f"Runs of the last {SNAPSHOT_DAYS} days:")
-    print("\n".join(recent_runs_report(snapshot)))
+    print("\n".join(recent_runs_report(snapshot, run_drifts(client, snapshot.recent_runs))))
     return 0
 
 

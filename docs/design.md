@@ -137,6 +137,7 @@ Each component has one responsibility.
 |---|---|
 | `garmin_reader` | Read Garmin Connect into an immutable `Snapshot` |
 | `load` | Derive acute and chronic load from the activities, the same way on every watch |
+| `drift` | Measure the heart-rate drift of continuous runs, for the snapshot only |
 | `regime` | Decide how much of the history still counts (section 8) |
 | `guardrails` | Validate a proposed week against the hard rules (section 7) |
 | `plan_writer` | Parse and serialise `plan.md` |
@@ -146,6 +147,17 @@ Each component has one responsibility.
 
 The separation that matters: **`guardrails` is deterministic code, not a prompt.** A
 constraint verified by a language model is not a constraint.
+
+**Heart-rate drift** (aerobic decoupling, Pa:HR) is how much heart rate rose against
+speed from the first half of a run to the second. `drift` reads it from the activity's
+FIT file, downloaded through the same Personal API, and only for continuous runs of at
+least an hour: a run with recovery or rest laps, or with more than one workout step
+between warm-up and cool-down, has no steady effort to compare, and warm-up and
+cool-down laps are left out. It is read-only context for the coach, like
+climb and place, and **not a guardrail**: no rule reads it. That is why only `snapshot`
+downloads FIT files, and `validate` and `push` never do; and why one unreadable file
+prints a notice and leaves that run's drift unknown instead of failing the snapshot.
+Nothing is stored between runs.
 
 ---
 

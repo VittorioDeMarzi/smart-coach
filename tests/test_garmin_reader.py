@@ -16,13 +16,14 @@ FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "garmin_activities.js
 class FakeGarmin:
     """Stands in for the Personal API client. Returns recorded shapes, never network."""
 
-    def __init__(self, *, rhr=None, hrv=None, zones=None):
+    def __init__(self, *, rhr=None, hrv=None, zones=None, activities=None):
         self._rhr = rhr
         self._hrv = hrv
         self._zones = zones
+        self._activities = FIXTURE["activities"] if activities is None else activities
 
     def activities(self, start, end):
-        return FIXTURE["activities"]
+        return self._activities
 
     def daily_heart_rate(self, day):
         return self._rhr
@@ -32,6 +33,9 @@ class FakeGarmin:
 
     def heart_rate_zones(self):
         return self._zones
+
+    def activity_fit(self, activity_id):
+        raise AssertionError("a snapshot never downloads activity files")
 
 
 def test_distances_convert_from_metres_to_kilometres():
@@ -195,10 +199,11 @@ def test_an_activity_without_route_data_reports_it_as_missing_not_as_flat():
 # --- the HTTP client -----------------------------------------------------------------
 
 class FakeResponse:
-    def __init__(self, status_code=200, body=None, text=None):
+    def __init__(self, status_code=200, body=None, text=None, content=b""):
         self.status_code = status_code
         self.ok = status_code < 400
         self.text = text if text is not None else ("" if body is None else json.dumps(body))
+        self.content = content
 
     def json(self):
         return json.loads(self.text)
@@ -217,7 +222,7 @@ class FakeSession:
         self.headers = {}
         self.gets, self.posts = [], []
 
-    def get(self, url, params=None, timeout=None):
+    def get(self, url, params=None, timeout=None, headers=None):
         self.gets.append((url, params))
         return self._responses.pop(0)
 
@@ -245,6 +250,21 @@ def test_a_day_without_data_reads_as_none():
     """Garmin answers 204 with no body for a night without an HRV reading."""
     session = FakeSession(FakeResponse(status_code=204, text=""))
     assert PersonalApiClient(session).hrv("2026-09-27") is None
+
+
+def test_the_activity_file_is_downloaded_as_raw_bytes():
+    session = FakeSession(FakeResponse(content=b"PK\x03\x04zip"))
+
+    body = PersonalApiClient(session).activity_fit(25008957306)
+
+    assert body == b"PK\x03\x04zip"
+    assert session.gets[0][0].endswith("/download-service/files/activity/25008957306")
+
+
+def test_the_activity_id_is_read():
+    raw = dict(FIXTURE["activities"][0], activityId=25008957306)
+    snapshot = fetch_snapshot(FakeGarmin(activities=[raw]), as_of=date(2026, 9, 26), days=28)
+    assert snapshot.activities[0].activity_id == 25008957306
 
 
 def test_a_refused_read_fails_the_whole_snapshot_under_its_own_name():

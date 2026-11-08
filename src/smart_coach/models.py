@@ -31,6 +31,17 @@ class Activity:
     # rate: the same effort on a hilly route elsewhere produces different numbers.
     location: str | None = None
     elevation_gain_m: float | None = None
+    # Garmin's id, needed to download the activity file for its heart-rate drift.
+    activity_id: int | None = None
+
+
+@dataclass(frozen=True)
+class Sample:
+    """One record of a run's activity file, timed from the first record."""
+
+    elapsed_s: float
+    speed_mps: float | None
+    heart_rate: int | None
 
 
 @dataclass(frozen=True)

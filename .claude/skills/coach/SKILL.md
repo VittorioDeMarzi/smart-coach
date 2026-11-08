@@ -56,6 +56,21 @@ Before drawing conclusions from pace and heart rate:
   "are these weeks representative, or was there heat, travel, illness?".
 - **A `?` is a missing value**, not a zero.
 
+**Drift** is how much heart rate rose against pace from the first half of a run to the
+second, measured only on continuous runs of an hour or more, without warm-up and
+cool-down. Use it to judge whether the long-run pace holds over the distance:
+
+- **Below 5%**, the aerobic base holds that duration at that pace.
+- **Above 5% on a long run**, the long-run pace or distance is too much for now.
+- **Compare only comparable runs.** Heat raises drift, and heat is not in the data; so
+  do hills in the second half.
+- **A negative drift is not a sign of great form**: the second half was faster,
+  downhill or with the wind. Read it as about zero.
+- **`-` is not measured** (under an hour, or not continuous: intervals, strides, a fast
+  finish, a fartlek workout), **`?` is missing**. Neither is zero. A fartlek or a
+  progression run freely, without a workout on the watch, looks continuous to the code:
+  ignore its drift.
+
 ## Easy-run pace
 
 Do not fix it in advance, and do not put it at the bottom of the range out of caution:
