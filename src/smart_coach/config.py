@@ -65,6 +65,11 @@ class HistoryConfig:
 @dataclass(frozen=True)
 class WorkoutConfig:
     easy_step_target: str
+    warmup_km: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        # TOML gives a list; collections in the models are tuples.
+        object.__setattr__(self, "warmup_km", tuple(self.warmup_km))
 
 
 @dataclass(frozen=True)

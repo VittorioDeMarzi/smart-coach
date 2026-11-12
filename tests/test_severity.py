@@ -23,7 +23,8 @@ def _week(total_km: float, longest_km: float | None = None) -> Week:
     each = (total_km - longest) / 3
     return Week(iso_year=2026, iso_week=40, workouts=tuple(
         Workout(day=day, name=name, sport="running",
-                steps=(Step(text=f"- {km:g}km Z2 Pace"),), total_km=km, is_quality=False)
+                steps=(Step(text="- Warmup 2km Z2 Pace intensity=warmup"),
+                       Step(text=f"- {km:g}km Z2 Pace")), total_km=km, is_quality=False)
         for day, name, km in zip(DAYS, ("Long", "E1", "E2", "E3"),
                                  (longest, each, each, each))))
 

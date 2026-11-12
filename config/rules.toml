@@ -55,3 +55,8 @@ fallback_long_run_km_cap = 16.0
 # whose description does not parse as steps is rejected. It lives here and not in the
 # code because which zone an easy run is run in is a training decision.
 easy_step_target = "Z2 Pace"
+# Every published workout opens with a warm-up of exactly one of these distances, ending
+# on its own at that distance. Never on the lap button: a press meant to end the warm-up
+# skips the step that follows it, and a missing warm-up sends the athlete straight into
+# the main set.
+warmup_km = [1.0, 2.0]

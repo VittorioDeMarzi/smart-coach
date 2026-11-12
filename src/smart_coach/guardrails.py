@@ -6,11 +6,12 @@ constraint (spec 4.2). Each rule returns violations; an empty result means admis
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import date, timedelta
 
 from smart_coach.config import Config
-from smart_coach.models import Regime, Severity, Snapshot, Violation, Week
+from smart_coach.models import Regime, Severity, Snapshot, Violation, Week, Workout
 
 
 MIN_WORKOUTS_FOR_A_MEANINGFUL_SHARE = 3
@@ -301,6 +302,39 @@ def _absolute_volume_cap(
     return violations
 
 
+WARMUP_INTENSITY = "intensity=warmup"
+LAP_BUTTON = "press lap"
+STEP_KM = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)km\b")
+
+
+def _opens_with_warmup(workout: Workout, distances_km: tuple[float, ...]) -> bool:
+    """First step is a warm-up that ends on its own at one of the allowed distances."""
+    if not workout.steps:
+        return False
+    first = workout.steps[0].text
+    distance = STEP_KM.search(first)
+    return (WARMUP_INTENSITY in first and LAP_BUTTON not in first
+            and distance is not None and float(distance.group(1)) in distances_km)
+
+
+def _warmup_opens_every_workout(week: Week, snapshot: Snapshot,
+                                config: Config) -> list[Violation]:
+    """Only on the week about to be published: later weeks are written without steps.
+    Days before the snapshot are left out, because the push never rewrites them.
+
+    A workout with no steps is refused too: the fallback publishes it as a single step,
+    which has no warm-up.
+    """
+    allowed = config.workout.warmup_km
+    return [Violation(
+        rule="warmup_required",
+        message=(f"{workout.day} {workout.name}: the first step must be a warm-up of "
+                 f"{' or '.join(f'{km:g}km' for km in allowed)} with "
+                 f"{WARMUP_INTENSITY} and without {LAP_BUTTON!r}."),
+    ) for workout in week.workouts
+        if workout.day >= snapshot.as_of and not _opens_with_warmup(workout, allowed)]
+
+
 def validate_structure(
     week: Week,
     previous_week: Week | None,
@@ -346,4 +380,5 @@ def validate(
     if not week.workouts:
         return structural
     return structural + tuple(_acwr_band(snapshot, regime, config)
-                              + _absolute_volume_cap(week, snapshot, regime, config))
+                              + _absolute_volume_cap(week, snapshot, regime, config)
+                              + _warmup_opens_every_workout(week, snapshot, config))

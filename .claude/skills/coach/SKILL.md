@@ -251,16 +251,17 @@ written in the native intervals.icu syntax**:
 Build week: HRV stable, third of the block.
 
 - 2026-09-28 | Easy | 8.0 km | easy
-  - 7km 5:40/km-6:05/km Pace
+  - Warmup 2km 5:50/km-6:30/km Pace intensity=warmup
+  - 5km 5:40/km-6:05/km Pace
   - Cooldown press lap 1km 6:15/km-7:30/km Pace intensity=cooldown
 - 2026-09-30 | Fartlek | 10.0 km | quality
-  - Warmup press lap 2km 5:40/km-6:05/km Pace intensity=warmup
+  - Warmup 2km 5:40/km-6:05/km Pace intensity=warmup
   6x
     - 2m 4:10/km Pace
     - 90s 6:15/km-7:30/km Pace
   - Cooldown press lap 1.5km 6:15/km-7:30/km Pace intensity=cooldown
 - 2026-10-04 | Long run | 16.0 km | easy
-  - Warmup press lap 1km 5:50/km-6:30/km Pace intensity=warmup
+  - Warmup 1km 5:50/km-6:30/km Pace intensity=warmup
   - 14km 5:50/km-6:15/km Pace
   - Cooldown press lap 1km 6:15/km-7:30/km Pace intensity=cooldown
 
@@ -284,11 +285,17 @@ Format rules:
   included (see "Easy-run pace"). A workout without steps is published as a single step
   with `easy_step_target` from `config/rules.toml`: a safety net, not a way to write a
   session.
+- **Every workout opens with a warm-up of 1 or 2 km that ends at its distance**, easy
+  runs and long runs included, as its own first step:
+  `- Warmup 2km <range> Pace intensity=warmup`. **Never `press lap` on the warm-up**: the
+  athlete presses lap to end a step, and a press on a step that ends on its own skips
+  the next one, straight into the main set. The pace range is the plan's choice for
+  that session. The allowed distances are `warmup_km` in `config/rules.toml`, and
+  `validate` refuses a workout that does not open this way.
 - **Every workout ends with a cool-down of at least 1 km**, as its own step:
   `- Cooldown press lap 1km <slow range> Pace intensity=cooldown`. `press lap` makes the
   watch stay on that step until the athlete presses the lap button, so the cool-down
-  lasts as long as the way home. Quality sessions also open with a warm-up written the
-  same way (`intensity=warmup`); a long run opens with a free first kilometre.
+  lasts as long as the way home.
 - An easy run on a day with a time limit can be written by time (`40m` instead of a
   distance), so it fits the day whatever pace it allows. The kilometres on the workout
   line stay an honest estimate, cool-down included: they are what the guardrails count.

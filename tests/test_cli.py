@@ -15,7 +15,8 @@ def _week(total_km: float) -> Week:
     days = (date(2026, 9, 28), date(2026, 9, 30), date(2026, 10, 2), date(2026, 10, 4))
     return Week(iso_year=2026, iso_week=40, workouts=tuple(
         Workout(day=day, name=name, sport="running",
-                steps=(Step(text="- 5km Z2 Pace"),),
+                steps=(Step(text="- Warmup 2km Z2 Pace intensity=warmup"),
+                       Step(text="- 5km Z2 Pace")),
                 total_km=km, is_quality=False)
         for day, name, km in zip(days, ("Long", "Easy", "Easy", "Easy"),
                                  (longest, each, each, each))

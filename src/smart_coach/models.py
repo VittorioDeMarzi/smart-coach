@@ -137,8 +137,8 @@ class Snapshot:
 class Step:
     """One line of intervals.icu workout-builder syntax, stored verbatim.
 
-    Deliberately not decomposed into duration/distance/target: nothing in this system
-    reasons about a step numerically (the guardrails use `Workout.total_km`), and a
+    Deliberately not decomposed into duration/distance/target: the guardrails count
+    volume with `Workout.total_km` and read only the opening warm-up's text, and a
     second representation would be a second syntax to keep in sync with theirs.
     `depth` is the nesting level, so a repeat block can be framed on output.
     """

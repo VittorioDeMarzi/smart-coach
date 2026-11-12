@@ -1,8 +1,10 @@
 from datetime import date
 
+import pytest
+
 from smart_coach.config import load_config
 from smart_coach.guardrails import validate
-from smart_coach.models import Regime, Snapshot, Step, Week, Workout
+from smart_coach.models import Regime, Severity, Snapshot, Step, Week, Workout
 
 CONFIG = load_config("tests/fixtures/config.toml")
 EMPTY_SNAPSHOT = Snapshot(as_of=date(2026, 9, 27), activities=(), chronic_load=None,
@@ -71,3 +73,51 @@ def test_a_plain_easy_week_has_no_violations_from_these_rules():
     assert _rules(violations) & {
         "no_back_to_back_quality", "min_easy_days_after_quality", "down_week_required"
     } == set()
+
+
+def _opening_with(*texts: str) -> Week:
+    return _week((Workout(day=date(2026, 9, 29), name="Easy", sport="running",
+                          steps=tuple(Step(text=t) for t in texts),
+                          total_km=8.0, is_quality=False),))
+
+
+@pytest.mark.parametrize("first", [
+    "- Warmup 2km 5:50/km-6:30/km Pace intensity=warmup",
+    "- Warmup 1km 5:50/km-6:30/km Pace intensity=warmup",
+])
+def test_a_warmup_that_ends_at_its_distance_is_accepted(first):
+    week = _opening_with(first, "- 6km 5:40/km-6:05/km Pace")
+    assert "warmup_required" not in _rules(
+        validate(week, None, EMPTY_SNAPSHOT, Regime.COLD, CONFIG))
+
+
+@pytest.mark.parametrize("steps", [
+    # No warm-up: the athlete starts straight on the main set.
+    ("- 5.5km 5:40/km-6:05/km Pace",),
+    # On the lap button: a press meant to end it skips the step after it.
+    ("- Warmup press lap 2km 5:50/km-6:30/km Pace intensity=warmup",),
+    # Not one of the allowed distances.
+    ("- Warmup 3km 5:50/km-6:30/km Pace intensity=warmup",),
+    ("- Warmup 1.5km 5:50/km-6:30/km Pace intensity=warmup",),
+    # Timed, not ending at a distance.
+    ("- Warmup 10m 5:50/km-6:30/km Pace intensity=warmup",),
+    # A cue alone does not make it a warm-up step on the watch.
+    ("- Warmup 2km 5:50/km-6:30/km Pace",),
+    # No steps: the fallback publishes a single step with no warm-up.
+    (),
+])
+def test_a_workout_without_a_proper_warmup_is_refused(steps):
+    week = _opening_with(*steps)
+    found = [v for v in validate(week, None, EMPTY_SNAPSHOT, Regime.COLD, CONFIG)
+             if v.rule == "warmup_required"]
+    assert len(found) == 1 and found[0].severity is Severity.BLOCK
+
+
+def test_a_day_already_past_is_not_held_to_the_warmup_rule():
+    """The push never rewrites a day before today, so an old session must not stop the
+    rest of the week from being republished."""
+    week = _opening_with("- 5.5km 5:40/km-6:05/km Pace")
+    later = Snapshot(as_of=date(2026, 9, 30), activities=(), chronic_load=None,
+                     acute_load=None, resting_hr=None, hrv_status=None)
+    assert "warmup_required" not in _rules(
+        validate(week, None, later, Regime.COLD, CONFIG))

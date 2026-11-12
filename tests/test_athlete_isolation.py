@@ -36,6 +36,7 @@ fallback_long_run_km_cap = 16.0
 
 [workout]
 easy_step_target = "Z2 Pace"
+warmup_km = [1.0, 2.0]
 """
 
 ATHLETE = """
